@@ -1,0 +1,14 @@
+{
+  "name": "weft-demo-agent",
+  "version": "1.0.0",
+  "description": "Demo A2A seller agent for Weft Marketplace",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "uuid": "^11.1.0"
+  }
+}

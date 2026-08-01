@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+dist/
+frontend/dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Dynamic Data & Uploads
+uploads/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
