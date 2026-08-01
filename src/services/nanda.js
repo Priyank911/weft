@@ -4,8 +4,9 @@ const NANDA_INDEX_URL = process.env.NANDA_INDEX_URL || 'http://localhost:5000';
 
 export function buildAgentFacts(listing) {
   return {
-    id: listing.id,
+    agent_id: listing.id,
     name: listing.title,
+    endpoint: listing.a2a_endpoint_url || `https://weft.marketplace/api/listings/${listing.id}`,
     description: listing.description,
     capabilities: listing.capabilities || [],
     category: listing.category,
@@ -26,13 +27,17 @@ export async function publishAgentFacts(listing) {
     const facts = buildAgentFacts(listing);
     // Locally it would be stored via db (e.g. updateListing) but here we might POST to remote index
     try {
-      const response = await fetch(`${NANDA_INDEX_URL}/api/v1/agents`, {
+      const response = await fetch(`${NANDA_INDEX_URL}/api/agents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(facts)
       });
       if (!response.ok) {
-        console.warn(`[NandaService] Failed to sync with remote NANDA Index: ${response.status}`);
+        const errText = await response.text();
+        console.warn(`[NandaService] Failed to sync with remote NANDA Index: ${response.status}`, errText);
+      } else {
+        const data = await response.json();
+        return { ...facts, agentId: data.agent_id || data.agentId };
       }
     } catch (e) {
       console.warn('[NandaService] NANDA Index unreachable, continuing locally', e.message);
@@ -52,7 +57,7 @@ export async function searchAgents(query, filters) {
       if (query) params.append('q', query);
       if (filters?.category) params.append('category', filters.category);
       
-      const response = await fetch(`${NANDA_INDEX_URL}/api/v1/agents/search?${params.toString()}`);
+      const response = await fetch(`${NANDA_INDEX_URL}/api/agents/search?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
         return data; // assuming array of agent facts
@@ -72,7 +77,7 @@ export async function searchAgents(query, filters) {
 export async function getAgentFacts(listingId) {
   try {
     try {
-      const response = await fetch(`${NANDA_INDEX_URL}/api/v1/agents/${listingId}`);
+      const response = await fetch(`${NANDA_INDEX_URL}/api/agents/${listingId}`);
       if (response.ok) {
         return await response.json();
       }

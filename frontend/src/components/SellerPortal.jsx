@@ -27,13 +27,14 @@ export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess
         showToast('Logged in successfully!', 'success');
       }
 
-      onAuthSuccess(authData.token, authData.user);
-
       // Create seller profile if needed
+      let profile = null;
       try {
-        const profile = await apiRequest('/api/sellers/profile', 'POST', { business_name: email.split('@')[0], description: 'Weft Seller' }, authData.token);
+        profile = await apiRequest('/api/sellers/profile', 'POST', { business_name: email.split('@')[0], description: 'Weft Seller' }, authData.token);
         localStorage.setItem('weft_seller', JSON.stringify(profile));
       } catch { /* already exists */ }
+
+      onAuthSuccess(authData.token, authData.user, profile);
 
     } catch (err) {
       showToast(`Auth error: ${err.message}`, 'info');

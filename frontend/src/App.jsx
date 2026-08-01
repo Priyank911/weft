@@ -51,11 +51,15 @@ export default function App() {
     showToast('Logged out successfully', 'info');
   };
 
-  const handleAuthSuccess = (newToken, newUser) => {
+  const handleAuthSuccess = (newToken, newUser, newSellerProfile = null) => {
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('weft_token', newToken);
     localStorage.setItem('weft_user', JSON.stringify(newUser));
+    if (newSellerProfile) {
+      setSellerProfile(newSellerProfile);
+      localStorage.setItem('weft_seller', JSON.stringify(newSellerProfile));
+    }
   };
 
   const ensureAgent = async () => {
