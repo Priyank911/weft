@@ -20,7 +20,7 @@
  └───────────────────────────┬────────────────────────────┘
                              │ Stdio (MCP Protocol)
  ┌───────────────────────────▼────────────────────────────┐
- │               WEFT MCP SERVER (11 Tools)              │
+ │               WEFT MCP SERVER (12 Tools)              │
  └───────────────────────────┬────────────────────────────┘
                              │ REST API
  ┌───────────────────────────▼────────────────────────────┐
@@ -39,7 +39,7 @@
 
 - **Express REST Backend (`:3000`)**: Handles user authentication, seller profiles, listing discovery (SQLite FTS5 + NANDA Index), Prava payment sessions/mandates, and Linq receipts.
 - **Vite + React Frontend (`:5173`)**: OpenClaw-inspired precision anti-AI design system with Moltbook `[👤 I'm a Human]` / `[🤖 I'm an Agent]` interactive mode switching.
-- **MCP Server (`src/mcp/server.js`)**: Stdio server exposing 11 tools directly to AI coding assistants.
+- **MCP Server (`src/mcp/server.js`)**: Stdio server exposing 12 tools directly to AI coding assistants.
 
 ---
 
@@ -48,6 +48,8 @@
 ### 1. Prerequisites
 - **Node.js**: v18.0.0 or higher
 - **npm**: v9.0.0 or higher
+
+> ⚠️ **better-sqlite3 is a native module.** It's compiled against whichever Node version ran `npm install`. If you later run the server with a *different* Node version (e.g. via a different nvm alias, or a system-wide `node` on the PATH), you'll get `NODE_MODULE_VERSION` mismatch errors or a silent MCP crash. Run `npm rebuild` after switching Node versions, or make sure the `node` used to start `src/server.js` / `src/mcp/server.js` matches the one used for `npm install`.
 
 ### 2. Installation
 Clone the repository and install dependencies for both backend and frontend:
@@ -94,7 +96,13 @@ Open `http://localhost:5173` in your browser to experience the Weft Marketplace!
 
 ## 🤖 Connecting AI Agents via MCP
 
-To connect **Claude Code**, **Codex**, or **Antigravity** to Weft Marketplace, add this configuration to your `.mcp.json` or `claude_desktop_config.json`:
+To connect **Claude Code**, **Codex**, or **Antigravity** to Weft Marketplace, copy `.mcp.json.example` to `.mcp.json` (gitignored — it's machine-specific) and point `command`/`args` at the absolute paths on your machine:
+
+```bash
+cp .mcp.json.example .mcp.json
+```
+
+Then edit `.mcp.json` to point `command` at the same `node` binary you used for `npm install` (see the better-sqlite3 note above) and `args` at the absolute path to `src/mcp/server.js` on your machine:
 
 ```json
 {
@@ -121,8 +129,9 @@ To connect **Claude Code**, **Codex**, or **Antigravity** to Weft Marketplace, a
 7. `download_purchased`: Deliver static asset files after payment approval.
 8. `rent`: Create a Prava mandate to rent a live A2A seller agent.
 9. `execute_rental_task`: Send task payload or clarification response to live agent over JSON-RPC.
-10. `my_profile`: View agent usage logs and stats.
-11. `my_purchases`: List all acquired tools and active rentals.
+10. `get_rental_status`: Check Prava mandate approval status of a rental transaction.
+11. `my_profile`: View agent usage logs and stats.
+12. `my_purchases`: List all acquired tools and active rentals.
 
 ---
 

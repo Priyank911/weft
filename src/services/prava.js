@@ -1,5 +1,9 @@
 import fetch from 'node-fetch';
 
+if (!process.env.PRAVA_API_URL) {
+  console.warn('[PravaService] PRAVA_API_URL not set in .env — falling back to default, this will likely fail against real sandbox');
+}
+
 const PRAVA_API_URL = process.env.PRAVA_API_URL || 'https://api.prava.com';
 const PRAVA_API_KEY = process.env.PRAVA_API_KEY || '';
 
@@ -80,6 +84,25 @@ export async function getPaymentStatus(sessionId) {
   }
 }
 
+export async function getMandateStatus(mandateId) {
+  try {
+    const response = await fetch(`${PRAVA_API_URL}/v1/mandates/${mandateId}`, {
+      method: 'GET',
+      headers: getHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`[PravaService] HTTP error! status: ${response.status}, message: ${errorText}`);
+    }
+
+    return await response.json(); // raw payload; caller inspects the returned status field
+  } catch (error) {
+    console.error('[PravaService] Error in getMandateStatus:', error);
+    throw { error: { code: 'PRAVA_MANDATE_STATUS_ERROR', message: error.message } };
+  }
+}
+
 export async function createMandate({ amount, currency, merchantName, merchantUrl, merchantCountry, frequency, validUntil, maxCharges, products, userId, userEmail }) {
   try {
     const body = {
@@ -119,7 +142,9 @@ export async function createMandate({ amount, currency, merchantName, merchantUr
       throw new Error(`[PravaService] HTTP error! status: ${response.status}, message: ${errorText}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log('[PravaService] Raw createMandate response:', JSON.stringify(data, null, 2));
+    return data;
   } catch (error) {
     console.error('[PravaService] Error in createMandate:', error);
     throw { error: { code: 'PRAVA_MANDATE_ERROR', message: error.message } };

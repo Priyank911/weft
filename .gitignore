@@ -12,6 +12,9 @@ build/
 .env.local
 .env.production
 
+# Personal MCP client config (absolute paths, machine-specific)
+.mcp.json
+
 # Dynamic Data & Uploads
 uploads/
 *.db

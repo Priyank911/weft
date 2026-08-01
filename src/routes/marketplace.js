@@ -1,12 +1,32 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getAgentById, getListingById, getSellerById, searchListingsFTS, searchListingsByFilter, createTransaction, updateTransactionStatus, updateTransactionPrava, getTransactionById, createLedgerEntry, incrementDownloadCount, logAgentUsage } from '../db/index.js';
-import { createPaymentSession, getPaymentStatus } from '../services/prava.js';
+import { createPaymentSession, getPaymentStatus, getMandateStatus } from '../services/prava.js';
 import { getDeliveryPayload } from '../services/asset-processor.js';
 import { sendPurchaseConfirmation, sendRentalNotification } from '../services/linq.js';
 import { createMandate } from '../services/prava.js';
 import { sendTask, getAgentCard, handleTaskResponse } from '../services/a2a-client.js';
+import { semanticSearch } from '../services/openai.js';
 import { AppError } from '../middleware/errorHandler.js';
+
+const LIVE_INTENT_PATTERN = /\b(rent|hire|live agent)\b/i;
+
+const STOPWORDS = new Set([
+  'a', 'an', 'the', 'i', 'need', 'to', 'for', 'of', 'in', 'on', 'is', 'am',
+  'want', 'me', 'my', 'please', 'can', 'you', 'find', 'looking', 'that', 'this'
+]);
+
+// Build an FTS5 MATCH expression from a free-text query: drop stopwords and
+// OR-join the remaining terms so natural-language queries still match
+// listings that don't contain every word (FTS5 barewords default to AND).
+function buildFtsQuery(query) {
+  const terms = query
+    .toLowerCase()
+    .split(/\W+/)
+    .filter(t => t.length > 1 && !STOPWORDS.has(t));
+  if (terms.length === 0) return null;
+  return terms.map(t => `"${t}"`).join(' OR ');
+}
 
 const router = Router();
 
@@ -27,7 +47,8 @@ router.post('/search', async (req, res, next) => {
     
     if (query) {
       try {
-        results = searchListingsFTS.all(query, limit, offset);
+        const ftsQuery = buildFtsQuery(query);
+        results = ftsQuery ? searchListingsFTS.all(ftsQuery, limit, offset) : [];
       } catch (e) {
         // FTS fallback
         results = searchListingsByFilter.all(
@@ -46,11 +67,22 @@ router.post('/search', async (req, res, next) => {
       );
     }
     
-    // 3. Log usage
+    // 3. Rank live-agent results semantically when relevant (relevance ranking, not raw SQL order)
+    const hasLiveResults = results.some(r => r.listing_type === 'live');
+    const suggestsLiveIntent = query && LIVE_INTENT_PATTERN.test(query);
+    if (query && (hasLiveResults || suggestsLiveIntent) && results.length > 0) {
+      try {
+        results = await semanticSearch(query, results);
+      } catch (e) {
+        console.warn('[Marketplace] Semantic search ranking failed, using raw order:', e.message);
+      }
+    }
+
+    // 4. Log usage
     const usageId = uuidv4();
     logAgentUsage.run(usageId, agent_id, 'search', null, query || 'browse', `Found ${results.length} results`);
-    
-    // 4. Return METADATA ONLY (no download URLs)
+
+    // 5. Return METADATA ONLY (no download URLs)
     const safeResults = results.map(r => ({
       id: r.id,
       title: r.title,
@@ -320,13 +352,46 @@ router.post('/rent', async (req, res, next) => {
   }
 });
 
+// Check rental mandate status
+router.get('/rent/:txId/status', async (req, res, next) => {
+  try {
+    const tx = getTransactionById.get(req.params.txId);
+    if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
+
+    // Try checking Prava mandate status
+    let currentStatus = tx.status;
+    if (tx.prava_mandate_id && tx.status === 'pending') {
+      try {
+        const mandateStatus = await getMandateStatus(tx.prava_mandate_id);
+        const status = mandateStatus?.status || mandateStatus?.mandate_status;
+        if (status === 'completed' || status === 'confirmed' || status === 'approved' || status === 'active') {
+          currentStatus = 'approved';
+          updateTransactionStatus.run('approved', tx.id);
+        } else if (status === 'failed' || status === 'declined' || status === 'cancelled') {
+          currentStatus = 'failed';
+          updateTransactionStatus.run('failed', tx.id);
+        }
+      } catch (e) {
+        console.warn('[Marketplace] Prava mandate status check failed:', e.message);
+      }
+    }
+
+    res.json({ data: { transaction_id: tx.id, status: currentStatus, approval_url: tx.prava_payment_url } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Execute task on rented live agent (A2A)
 router.post('/rent/:txId/execute', async (req, res, next) => {
   try {
     const { message } = req.body;
     const tx = getTransactionById.get(req.params.txId);
     if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
-    
+    if (!['approved', 'captured'].includes(tx.status)) {
+      throw new AppError('PAYMENT_REQUIRED', 402, 'Rental payment has not been approved yet. Check status with get_rental_status before executing tasks.');
+    }
+
     const listing = getListingById.get(tx.listing_id);
     if (!listing || !listing.a2a_endpoint_url) {
       throw new AppError('VALIDATION_ERROR', 400, 'No A2A endpoint configured for this listing');
@@ -353,9 +418,9 @@ router.post('/rent/:txId/execute', async (req, res, next) => {
         data: {
           task_id: taskId,
           status: parsed.status,
-          result: parsed.artifacts || null,
+          result: parsed.output ?? (parsed.artifacts && parsed.artifacts.length ? parsed.artifacts : null),
           clarification_needed: parsed.status === 'input-required',
-          question: parsed.inputMessage || null
+          question: parsed.clarificationQuestion || null
         }
       });
     } catch (e) {
