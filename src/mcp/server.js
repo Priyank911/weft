@@ -39,12 +39,13 @@ async function fetchApi(path, options = {}) {
 
 // Helper to validate agent and log usage
 async function validateAgentAndLogUsage(agent_id, tool_name, params, listing_id = null) {
-  const agent = await db.getAgentById(agent_id);
+  const agent = db.getAgentById.get(agent_id);
   if (!agent) {
     throw new Error(`Agent not found: ${agent_id}`);
   }
   
-  await db.logAgentUsage(
+  db.logAgentUsage.run(
+    uuidv4(),
     agent_id,
     tool_name,
     listing_id,
@@ -79,28 +80,28 @@ server.tool('register_agent', 'Register a new agent on the Weft Marketplace', {
   user_email: z.string().email(),
   capabilities: z.array(z.string()).optional()
 }, toolHandler(async ({ agent_type, agent_name, user_email, capabilities }) => {
-  let user = await db.getUserByEmail(user_email);
+  let user = db.getUserByEmail.get(user_email);
   if (!user) {
     // Create user if not exists
     const userId = uuidv4();
-    user = await db.createUser({
-      id: userId,
-      email: user_email,
-      role: 'buyer',
-      password_hash: 'dummy_hash_' + Date.now()
-    });
+    const hash = 'dummy_hash_' + Date.now();
+    db.createUser.run(userId, user_email, hash, 'buyer', null, null);
+    user = { id: userId, email: user_email, role: 'buyer' };
   }
 
   const agentId = uuidv4();
-  const profile = await db.createAgentProfile({
+  const capsStr = capabilities ? JSON.stringify(capabilities) : '[]';
+  db.createAgentProfile.run(agentId, user.id, agent_type, agent_name, capsStr, 0, null);
+  
+  const profile = {
     id: agentId,
     user_id: user.id,
     agent_type,
     agent_name,
-    capabilities: capabilities ? JSON.stringify(capabilities) : '[]'
-  });
+    capabilities: capsStr
+  };
 
-  return { agent_id: profile.id, profile };
+  return { agent_id: agentId, profile };
 }));
 
 // 2. search
@@ -113,17 +114,13 @@ server.tool('search', 'Search for agents, skills, and tools in the marketplace',
 }, toolHandler(async ({ query, agent_id, category, listing_type, max_price_cents }) => {
   await validateAgentAndLogUsage(agent_id, 'search', { query, category, listing_type, max_price_cents });
   
-  const searchParams = new URLSearchParams();
-  searchParams.append('query', query);
-  searchParams.append('agent_id', agent_id);
-  if (category) searchParams.append('category', category);
-  if (listing_type) searchParams.append('listing_type', listing_type);
-  if (max_price_cents !== undefined) searchParams.append('max_price_cents', max_price_cents.toString());
-
-  const data = await fetchApi(`/search?${searchParams.toString()}`);
+  const data = await fetchApi(`/search`, {
+    method: 'POST',
+    body: JSON.stringify({ query, agent_id, category, listing_type, max_price_cents })
+  });
   
   // Format response for agents with guidance
-  const results = data.data || [];
+  const results = data.data.results || [];
   const formattedResults = results.map(r => {
     let guidance = '';
     if (r.price_cents === 0) {
@@ -158,7 +155,7 @@ server.tool('get_listing_detail', 'Get full details of a specific listing', {
 }, toolHandler(async ({ listing_id, agent_id }) => {
   await validateAgentAndLogUsage(agent_id, 'get_listing_detail', { listing_id }, listing_id);
   
-  const listing = await db.getListingById(listing_id);
+  const listing = db.getListingById.get(listing_id);
   if (!listing) throw new Error('Listing not found');
 
   return { 
@@ -322,7 +319,7 @@ server.tool('my_purchases', 'List all purchases and rentals for the current agen
 }, toolHandler(async ({ agent_id }) => {
   await validateAgentAndLogUsage(agent_id, 'my_purchases', {});
   
-  const transactions = await db.getTransactionsByAgent(agent_id);
+  const transactions = db.getTransactionsByAgent.all(agent_id);
   
   return {
     agent_id,
