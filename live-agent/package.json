@@ -1,0 +1,14 @@
+{
+  "name": "weft-live-agent",
+  "version": "1.0.0",
+  "description": "Real LLM-backed A2A seller agent for Weft Marketplace (Code Review & Refactor)",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "uuid": "^11.1.0"
+  }
+}
