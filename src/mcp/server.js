@@ -43,7 +43,7 @@ async function validateAgentAndLogUsage(agent_id, tool_name, params, listing_id 
   if (!agent) {
     throw new Error(`Agent not found: ${agent_id}`);
   }
-  
+
   db.logAgentUsage.run(
     uuidv4(),
     agent_id,
@@ -52,7 +52,7 @@ async function validateAgentAndLogUsage(agent_id, tool_name, params, listing_id 
     JSON.stringify(params).substring(0, 500),
     'Tool called via MCP'
   );
-  
+
   return agent;
 }
 
@@ -84,28 +84,27 @@ server.tool('register_agent', 'Register a new agent on the Weft Marketplace', {
   if (!user) {
     // Create user if not exists
     const userId = uuidv4();
-    const hash = 'dummy_hash_' + Date.now();
-    db.createUser.run(userId, user_email, hash, 'buyer', null, null);
-    user = { id: userId, email: user_email, role: 'buyer' };
+    db.createUser.run(userId, user_email, 'dummy_hash_' + Date.now(), 'buyer', null, null);
+    user = db.getUserById.get(userId);
   }
 
   const agentId = uuidv4();
-  const capsStr = capabilities ? JSON.stringify(capabilities) : '[]';
-  db.createAgentProfile.run(agentId, user.id, agent_type, agent_name, capsStr, 0, null);
-  
-  const profile = {
-    id: agentId,
-    user_id: user.id,
+  db.createAgentProfile.run(
+    agentId,
+    user.id,
     agent_type,
     agent_name,
-    capabilities: capsStr
-  };
+    capabilities ? JSON.stringify(capabilities) : '[]',
+    0,
+    '{}'
+  );
+  const profile = db.getAgentById.get(agentId);
 
-  return { agent_id: agentId, profile };
+  return { agent_id: profile.id, profile };
 }));
 
 // 2. search
-server.tool('search', 'Search for agents, skills, and tools in the marketplace', {
+server.tool('search', 'Search for agents, skills, and tools in the marketplace. Live-agent results are ranked by semantic relevance to the query, not just returned in database order.', {
   query: z.string(),
   agent_id: z.string(),
   category: z.string().optional(),
@@ -113,10 +112,10 @@ server.tool('search', 'Search for agents, skills, and tools in the marketplace',
   max_price_cents: z.number().optional()
 }, toolHandler(async ({ query, agent_id, category, listing_type, max_price_cents }) => {
   await validateAgentAndLogUsage(agent_id, 'search', { query, category, listing_type, max_price_cents });
-  
-  const data = await fetchApi(`/search`, {
+
+  const data = await fetchApi('/search', {
     method: 'POST',
-    body: JSON.stringify({ query, agent_id, category, listing_type, max_price_cents })
+    body: JSON.stringify({ agent_id, query, category, listing_type, max_price_cents })
   });
   
   // Format response for agents with guidance
@@ -301,7 +300,23 @@ server.tool('execute_rental_task', 'Communicate with a rented live agent', {
   };
 }));
 
-// 10. my_profile
+// 10. get_rental_status
+server.tool('get_rental_status', 'Check the mandate approval status of a rental transaction', {
+  transaction_id: z.string(),
+  agent_id: z.string()
+}, toolHandler(async ({ transaction_id, agent_id }) => {
+  await validateAgentAndLogUsage(agent_id, 'get_rental_status', { transaction_id });
+
+  const data = await fetchApi(`/rent/${transaction_id}/status`);
+
+  return {
+    agent_id,
+    status: data.data.status,
+    approval_url: data.data.approval_url
+  };
+}));
+
+// 11. my_profile
 server.tool('my_profile', 'Get the current agent\'s profile information', {
   agent_id: z.string()
 }, toolHandler(async ({ agent_id }) => {
@@ -313,7 +328,7 @@ server.tool('my_profile', 'Get the current agent\'s profile information', {
   };
 }));
 
-// 11. my_purchases
+// 12. my_purchases
 server.tool('my_purchases', 'List all purchases and rentals for the current agent', {
   agent_id: z.string()
 }, toolHandler(async ({ agent_id }) => {

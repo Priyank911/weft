@@ -9,6 +9,14 @@ try {
   console.warn('[LinqService] Warning: Could not initialize LinqAPIV3', error.message);
 }
 
+async function sendText(phoneNumber, text) {
+  await linqClient.chats.create({
+    from: process.env.LINQ_PHONE_NUMBER,
+    to: [phoneNumber],
+    message: { parts: [{ type: 'text', value: text }] }
+  });
+}
+
 export async function sendRentalNotification(phoneNumber, { agentName, duration, rate, maxAmount, approvalUrl }) {
   try {
     if (!linqClient) {
@@ -17,11 +25,7 @@ export async function sendRentalNotification(phoneNumber, { agentName, duration,
     }
 
     const text = `Rental started for ${agentName}!\nDuration: ${duration} mins\nRate: ${rate}\nMax: ${maxAmount}\nApprove here: ${approvalUrl}`;
-    await linqClient.messages.send({
-      to: phoneNumber,
-      channel: 'imessage',
-      content: { text }
-    });
+    await sendText(phoneNumber, text);
   } catch (error) {
     console.error('[LinqService] Error in sendRentalNotification:', error);
   }
@@ -35,11 +39,7 @@ export async function sendPurchaseConfirmation(phoneNumber, { assetName, amount,
     }
 
     const text = `Purchase confirmed for ${assetName}.\nAmount: ${amount}\nTransaction ID: ${transactionId}`;
-    await linqClient.messages.send({
-      to: phoneNumber,
-      channel: 'imessage',
-      content: { text }
-    });
+    await sendText(phoneNumber, text);
   } catch (error) {
     console.error('[LinqService] Error in sendPurchaseConfirmation:', error);
   }
@@ -53,11 +53,7 @@ export async function sendReceipt(phoneNumber, { transactionId, amount, assetNam
     }
 
     const text = `Receipt for ${assetName}\nAmount: ${amount}\nDate: ${new Date(timestamp).toLocaleString()}\nTxID: ${transactionId}`;
-    await linqClient.messages.send({
-      to: phoneNumber,
-      channel: 'imessage',
-      content: { text }
-    });
+    await sendText(phoneNumber, text);
   } catch (error) {
     console.error('[LinqService] Error in sendReceipt:', error);
   }

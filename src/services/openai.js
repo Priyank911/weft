@@ -1,21 +1,7 @@
-import OpenAI from 'openai';
-
-let openai = null;
-
-function getClient() {
-  if (!openai) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey || apiKey === 'sk-your-openai-key') {
-      console.warn('[OpenAI] No valid API key configured. AI features will use fallbacks.');
-      return null;
-    }
-    openai = new OpenAI({ apiKey });
-  }
-  return openai;
-}
+import { getLLMClient } from './llm-client.js';
 
 export async function generateListingMetadata(rawDescription, fileMetadata) {
-  const client = getClient();
+  const { client, model } = getLLMClient();
   if (!client) {
     // Fallback: generate basic metadata without AI
     return {
@@ -31,7 +17,7 @@ export async function generateListingMetadata(rawDescription, fileMetadata) {
 
   try {
     const response = await client.chat.completions.create({
-      model: 'gpt-4o',
+      model,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -62,7 +48,7 @@ export async function generateListingMetadata(rawDescription, fileMetadata) {
 }
 
 export async function semanticSearch(query, listings) {
-  const client = getClient();
+  const { client, model } = getLLMClient();
   if (!client) {
     // Fallback: simple keyword matching
     const q = query.toLowerCase();
@@ -81,7 +67,7 @@ export async function semanticSearch(query, listings) {
   try {
     const listingsStr = JSON.stringify(listings.map(l => ({ id: l.id, title: l.title, description: l.description, tags: l.tags })));
     const response = await client.chat.completions.create({
-      model: 'gpt-4o',
+      model,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -109,14 +95,14 @@ export async function semanticSearch(query, listings) {
 }
 
 export async function parseAgentQuery(rawQuery) {
-  const client = getClient();
+  const { client, model } = getLLMClient();
   if (!client) {
     return { intent: 'search', category: null, priceRange: null, features: [] };
   }
 
   try {
     const response = await client.chat.completions.create({
-      model: 'gpt-4o',
+      model,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -138,7 +124,7 @@ export async function parseAgentQuery(rawQuery) {
 }
 
 export async function generateFileManifest(fileList) {
-  const client = getClient();
+  const { client, model } = getLLMClient();
   if (!client) {
     // Fallback: basic manifest without AI descriptions
     const manifest = {};
@@ -148,7 +134,7 @@ export async function generateFileManifest(fileList) {
 
   try {
     const response = await client.chat.completions.create({
-      model: 'gpt-4o',
+      model,
       response_format: { type: 'json_object' },
       messages: [
         {

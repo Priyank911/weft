@@ -12,8 +12,6 @@ import marketplaceRoutes from './routes/marketplace.js';
 import paymentRoutes from './routes/payments.js';
 import notificationRoutes from './routes/notifications.js';
 
-
-
 const app = express();
 
 app.use(cors());

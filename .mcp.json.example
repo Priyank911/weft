@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "weft-marketplace": {
+      "command": "node",
+      "args": ["/absolute/path/to/weft-agentic-marketplace/src/mcp/server.js"],
+      "env": {
+        "PORT": "3000"
+      }
+    }
+  }
+}

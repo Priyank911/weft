@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "mcp": "node src/mcp/server.js",
     "seed": "node src/db/seed.js",
-    "demo-agent": "node demo-agent/server.js"
+    "demo-agent": "node demo-agent/server.js",
+    "live-agent": "node live-agent/server.js"
   },
   "keywords": [
     "mcp",

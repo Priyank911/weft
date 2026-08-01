@@ -121,7 +121,9 @@ export function handleTaskResponse(response) {
     return {
       status: result.status, // e.g., 'working', 'input-required', 'completed', 'failed'
       artifacts: result.artifacts || [],
-      messages: result.messages || []
+      messages: result.messages || [],
+      output: result.output ?? null,
+      clarificationQuestion: result.clarification_question ?? null
     };
   } catch (error) {
     console.error('[A2AClient] Error in handleTaskResponse:', error);
