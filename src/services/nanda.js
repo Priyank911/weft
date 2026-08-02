@@ -2,13 +2,24 @@ import fetch from 'node-fetch';
 
 const NANDA_INDEX_URL = process.env.NANDA_INDEX_URL || 'http://localhost:5000';
 
+function safeParseArray(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function buildAgentFacts(listing) {
   return {
     agent_id: listing.id,
     name: listing.title,
     endpoint: listing.a2a_endpoint_url || `https://weft.marketplace/api/listings/${listing.id}`,
     description: listing.description,
-    capabilities: listing.capabilities || [],
+    capabilities: safeParseArray(listing.capabilities),
     category: listing.category,
     pricing: {
       price_cents: listing.price_cents,
@@ -16,7 +27,7 @@ export function buildAgentFacts(listing) {
       rate_type: listing.rate_type,
       rate_limit: listing.rate_limit
     },
-    tags: listing.tags || [],
+    tags: safeParseArray(listing.tags),
     created_at: listing.created_at,
     type: listing.listing_type
   };

@@ -1,11 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import '../seller.css';
-import { 
-  Mail, Lock, Phone, ArrowRight, Store, Plus, RefreshCw, DollarSign, Layers, 
-  Activity, CheckCircle2, Shield, Cpu, Upload, LogOut, Search, CreditCard, 
-  Zap, Copy, Check, FileText, Key, ChevronRight, BarChart2, ArrowLeft 
+import {
+  Mail, Lock, Phone, ArrowRight, Store, Plus, RefreshCw, DollarSign, Layers,
+  Activity, CheckCircle2, Shield, Cpu, Upload, LogOut, Search, CreditCard,
+  Zap, Copy, Check, FileText, Key, ChevronRight, BarChart2, ArrowLeft, File as FileIcon, X as XIcon
 } from 'lucide-react';
-import { apiRequest } from '../api';
+import { apiRequest, API_BASE } from '../api';
+import MetadataReviewModal from './MetadataReviewModal';
+
+const ACCEPTED_EXTENSIONS = ['.zip', '.doc', '.docx', '.txt', '.md'];
+
+async function uploadListingFile(listingId, file, token) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE}/api/listings/${listingId}/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || 'Upload failed');
+  return data.data;
+}
 
 export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess, onListingPublished, showToast, onLogout, onGoToLanding }) {
   const [authMode, setAuthMode] = useState('login');
@@ -28,6 +44,13 @@ export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess
   const [category, setCategory] = useState('Agent Skills');
   const [a2aUrl, setA2aUrl] = useState('');
   const [copiedKey, setCopiedKey] = useState(false);
+
+  // Upload wizard state
+  const [uploadFile, setUploadFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [reviewMetadata, setReviewMetadata] = useState(null);
+  const [reviewListingId, setReviewListingId] = useState(null);
 
   const sellerId = localSeller ? localSeller.id : (user ? user.id : 'seller-demo-id');
 
@@ -98,8 +121,24 @@ export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess
     }
   };
 
+  const resetCreateForm = () => {
+    setTitle('');
+    setDescription('');
+    setLongDescription('');
+    setPriceCents(0);
+    setA2aUrl('');
+    setUploadFile(null);
+    setActiveTab('overview');
+  };
+
   const handleCreateListing = async (e) => {
     e.preventDefault();
+    if (listingType === 'static' && !uploadFile) {
+      showToast('Attach a file (.zip, .doc, .docx, .txt, .md) before publishing a static listing.', 'info');
+      return;
+    }
+
+    setPublishing(true);
     try {
       showToast('Creating draft listing...', 'info');
       const listing = await apiRequest('/api/listings', 'POST', {
@@ -111,25 +150,75 @@ export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess
         price_cents: parseInt(priceCents) || 0,
         a2a_endpoint_url: a2aUrl,
         seller_id: sellerId,
-        capabilities: ['code_review', 'automation'],
-        tags: [category.toLowerCase().replace(/[^a-z0-9]+/g, '-'), listingType]
+        capabilities: [],
+        tags: []
       }, token);
 
+      if (listingType === 'live') {
+        // Live A2A listings have no file to analyze — publish directly.
+        showToast('Publishing to NANDA Fact Index & FTS...', 'info');
+        await apiRequest(`/api/listings/${listing.id}/publish`, 'POST', {}, token);
+        showToast('Listing published successfully!', 'success');
+        resetCreateForm();
+        loadSellerData();
+        if (onListingPublished) onListingPublished();
+        return;
+      }
+
+      showToast('Uploading asset file...', 'info');
+      await uploadListingFile(listing.id, uploadFile, token);
+
+      showToast('Analyzing file contents with AI...', 'info');
+      const metadata = await apiRequest(`/api/listings/${listing.id}/generate-metadata`, 'POST', {}, token);
+
+      setReviewListingId(listing.id);
+      setReviewMetadata(metadata);
+    } catch (err) {
+      showToast(`Publish error: ${err.message}`, 'info');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleConfirmMetadata = async (confirmed) => {
+    try {
+      showToast('Saving confirmed metadata...', 'info');
+      await apiRequest(`/api/listings/${reviewListingId}`, 'PUT', confirmed, token);
+
       showToast('Publishing to NANDA Fact Index & FTS...', 'info');
-      await apiRequest(`/api/listings/${listing.id}/publish`, 'POST', {}, token);
+      await apiRequest(`/api/listings/${reviewListingId}/publish`, 'POST', {}, token);
 
       showToast('Listing published successfully!', 'success');
-      setTitle('');
-      setDescription('');
-      setLongDescription('');
-      setPriceCents(0);
-      setA2aUrl('');
-      setActiveTab('overview');
-
+      setReviewMetadata(null);
+      setReviewListingId(null);
+      resetCreateForm();
       loadSellerData();
       if (onListingPublished) onListingPublished();
     } catch (err) {
       showToast(`Publish error: ${err.message}`, 'info');
+    }
+  };
+
+  const handleCancelReview = () => {
+    setReviewMetadata(null);
+    setReviewListingId(null);
+  };
+
+  const handleFileSelect = (file) => {
+    if (!file) return;
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!ACCEPTED_EXTENSIONS.includes(ext)) {
+      showToast(`Unsupported file type. Accepted: ${ACCEPTED_EXTENSIONS.join(', ')}`, 'info');
+      return;
+    }
+    setUploadFile(file);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
     }
   };
 
@@ -542,8 +631,8 @@ export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess
                   {listingType === 'live' && (
                     <div className="form-group">
                       <label>Live A2A Endpoint URL</label>
-                      <input 
-                        type="url" 
+                      <input
+                        type="url"
                         className="form-input"
                         style={{ paddingLeft: '14px' }}
                         placeholder="https://my-live-agent.ngrok.app/a2a"
@@ -553,8 +642,59 @@ export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess
                     </div>
                   )}
 
-                  <button type="submit" className="btn btn-brand btn-block btn-lg" style={{ marginTop: '18px' }}>
-                    Publish to NANDA Index & Marketplace <ArrowRight size={18} />
+                  {listingType === 'static' && (
+                    <div className="form-group">
+                      <label>Asset File ({ACCEPTED_EXTENSIONS.join(', ')})</label>
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={handleDrop}
+                        onClick={() => document.getElementById('seller-file-input').click()}
+                        style={{
+                          border: `2px dashed ${isDragging ? 'var(--accent-brand)' : 'var(--border-strong)'}`,
+                          borderRadius: 'var(--radius-md)',
+                          padding: '28px',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          background: isDragging ? 'rgba(255, 77, 77, 0.06)' : 'var(--bg-input)',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <input
+                          id="seller-file-input"
+                          type="file"
+                          accept={ACCEPTED_EXTENSIONS.join(',')}
+                          style={{ display: 'none' }}
+                          onChange={(e) => handleFileSelect(e.target.files[0])}
+                        />
+                        {uploadFile ? (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                            <FileIcon size={20} color="var(--accent-brand)" />
+                            <span style={{ fontWeight: 600 }}>{uploadFile.name}</span>
+                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                              ({(uploadFile.size / 1024).toFixed(1)} KB)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setUploadFile(null); }}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                            >
+                              <XIcon size={16} />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload size={24} style={{ marginBottom: '8px', color: 'var(--text-secondary)' }} />
+                            <div style={{ fontWeight: 600 }}>Drag & drop your asset file here</div>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>or click to browse</div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn btn-brand btn-block btn-lg" style={{ marginTop: '18px' }} disabled={publishing}>
+                    {publishing ? 'Working...' : <>Publish to NANDA Index & Marketplace <ArrowRight size={18} /></>}
                   </button>
                 </form>
               </div>
@@ -631,6 +771,14 @@ export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess
           </main>
         </div>
       </div>
+
+      {reviewMetadata && (
+        <MetadataReviewModal
+          metadata={reviewMetadata}
+          onConfirm={handleConfirmMetadata}
+          onCancel={handleCancelReview}
+        />
+      )}
     </div>
   );
 }

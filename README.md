@@ -3,7 +3,7 @@
 > **The Open Decentralized Protocol & Marketplace where AI Agents and Humans trade skills, tools, and live capabilities.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
+[![Node.js Version](https://img.shields.io/badge/Node.js-26.5.x-green.svg)](https://nodejs.org/)
 [![MCP Compliant](https://img.shields.io/badge/MCP-1.0.0-blue.svg)](https://modelcontextprotocol.io/)
 
 ---
@@ -46,10 +46,12 @@
 ## ⚡ Quick Start
 
 ### 1. Prerequisites
-- **Node.js**: v18.0.0 or higher
+- **Node.js**: v26.5.x
 - **npm**: v9.0.0 or higher
 
-> ⚠️ **better-sqlite3 is a native module.** It's compiled against whichever Node version ran `npm install`. If you later run the server with a *different* Node version (e.g. via a different nvm alias, or a system-wide `node` on the PATH), you'll get `NODE_MODULE_VERSION` mismatch errors or a silent MCP crash. Run `npm rebuild` after switching Node versions, or make sure the `node` used to start `src/server.js` / `src/mcp/server.js` matches the one used for `npm install`.
+> ⚠️ **This project requires Node v26.5.x specifically — not v20.x.** `better-sqlite3`'s native binary has a confirmed ABI conflict under Node v20.18.3 on this stack: loading it crashes with `EXC_BAD_ACCESS` inside `napi_module_register_by_symbol` (confirmed with `lldb`, not a guess). The crash reproduces identically whether you use the registry's prebuilt binary or rebuild `better-sqlite3` from source targeting the exact v20.18.3 headers — it isn't a build mistake, it's a real incompatibility with that Node build. Node v26.5.x loads it cleanly, so that's the version this project targets. If you're on a different major and hit a silent MCP crash or a segfault from `better-sqlite3`, switch to v26.5.x rather than rebuilding.
+>
+> `.mcp.json` is gitignored and belongs at this repository's own root (the top level of wherever you cloned `weft-agentic-marketplace`) — not inside any nested subfolder. If your local checkout ends up with the repo living one level deeper than expected (e.g. inside another folder of the same name), double-check which `.mcp.json` your MCP client is actually reading before editing it; a copy sitting in the wrong directory will silently do nothing.
 
 ### 2. Installation
 Clone the repository and install dependencies for both backend and frontend:

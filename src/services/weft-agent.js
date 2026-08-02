@@ -12,7 +12,7 @@ const NANDA_INDEX_URL = process.env.NANDA_INDEX_URL || 'https://nest.projectnand
  * Uses LLM to intelligently search and return the best matching NANDA agent IDs
  */
 export async function aiSearchNanda(query) {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'sk-your-openai-key') {
     throw new Error('OPENAI_API_KEY is not set');
   }
 
