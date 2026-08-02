@@ -372,15 +372,38 @@ export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess
                     </div>
 
                     {/* Linq SMS Receipt Node Card */}
-                    <div className="virtual-prava-card emerald-glow">
+                    {/* Linq SMS Receipt Node Card */}
+                    <div className="virtual-prava-card emerald-glow" style={{ position: 'relative' }}>
                       <div className="vcard-top">
                         <span className="vcard-bank-name">LINQ RECEIPT DISPATCH</span>
                         <CheckCircle2 size={18} className="accent-text-green" />
                       </div>
                       <div className="vcard-number">linq_sms_#9012</div>
+                      
+                      {/* QR Code & SMS Activation Widget */}
+                      <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px', margin: '10px 0', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                          📱 Scan QR to activate Seller iMessage Notifications
+                        </div>
+                        <img 
+                          src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=sms%3A%2B12063268039%3Fbody%3DWeft%2520seller%2520account%2520activate" 
+                          alt="Seller Linq Activation QR Code"
+                          style={{ width: '120px', height: '120px', borderRadius: '8px', border: '2px solid var(--border-subtle)', margin: '0 auto 8px auto', display: 'block' }}
+                        />
+                        <a 
+                          href="sms:+12063268039?body=Weft%20seller%20account%20activate" 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: '0.75rem', width: '100%', display: 'inline-flex', justifyContent: 'center', gap: '6px' }}
+                        >
+                          <Zap size={12} color="var(--accent-green)" /> Send "Weft seller account activate"
+                        </a>
+                      </div>
+
                       <div className="vcard-bottom">
                         <span>{user.email.split('@')[0].toUpperCase()}</span>
-                        <span className="vcard-status-pill green">VERIFIED</span>
+                        <span className="vcard-status-pill green">ACTIVE & OPTED-IN</span>
                       </div>
                     </div>
                   </div>
