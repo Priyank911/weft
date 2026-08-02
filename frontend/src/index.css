@@ -1873,25 +1873,194 @@ body {
   }
 }
 
-/* Responsive adjustments */
+/* Comprehensive Mobile-First & Responsive Design System */
 @media (max-width: 768px) {
-  .hero-headline {
-    font-size: 2.5rem;
+  /* Navigation Bar Mobile Styling */
+  .site-header {
+    top: 4px;
+    padding: 0 8px;
+    margin-top: 4px;
+    margin-bottom: 12px;
   }
 
-  .stats-ribbon {
-    grid-template-columns: 1fr 1fr;
+  .header-container {
+    padding: 6px 12px;
+    border-radius: 20px;
+    gap: 8px;
   }
 
-  .footer-container {
-    grid-template-columns: 1fr;
+  .brand-logo-img {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
   }
 
-  .seller-metrics-grid {
-    grid-template-columns: 1fr 1fr;
+  .brand-title {
+    font-size: 1.15rem;
+  }
+
+  .brand-tag {
+    font-size: 0.55rem;
+    padding: 1px 6px;
   }
 
   .desktop-nav {
+    display: none !important;
+  }
+
+  .mode-toggle-pill {
+    padding: 2px;
+  }
+
+  .mode-btn {
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    gap: 4px;
+  }
+
+  /* Hero Section Mobile Compact View */
+  .hero-section {
+    padding: 20px 12px 16px;
+  }
+
+  .hero-badge-pill {
+    font-size: 0.72rem;
+    padding: 4px 12px;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .badge-highlight {
+    font-size: 0.7rem;
+  }
+
+  .hero-headline {
+    font-size: 1.85rem !important;
+    line-height: 1.14;
+    letter-spacing: -0.03em;
+    margin-bottom: 10px;
+  }
+
+  .hero-subtext {
+    font-size: 0.88rem;
+    line-height: 1.45;
+    margin-bottom: 16px;
+    padding: 0 4px;
+  }
+
+  .hero-cta-group {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .hero-cta-group .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 0.88rem;
+  }
+
+  .hero-code-snippet {
+    font-size: 0.72rem;
+    padding: 6px 12px;
+    margin-bottom: 24px;
+    max-width: 100%;
+    overflow-x: auto;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .hero-partners-bar {
+    margin-top: 14px;
+  }
+
+  .partners-logos {
+    gap: 14px;
+  }
+
+  .partner-logo-item {
+    font-size: 0.85rem;
+  }
+
+  /* Stats Ribbon Mobile Grid */
+  .stats-ribbon {
+    grid-template-columns: repeat(2, 1fr) !important;
+    border-radius: var(--radius-md);
+  }
+
+  .stat-item {
+    padding: 14px 10px;
+  }
+
+  .stat-val {
+    font-size: 1.35rem;
+  }
+
+  .stat-lbl {
+    font-size: 0.68rem;
+  }
+
+  /* Protocol Blueprint Section Mobile */
+  .protocol-spec-container {
+    padding: 24px 12px 0;
+  }
+
+  .protocol-grid {
+    grid-template-columns: 1fr !important;
+    gap: 24px;
+  }
+
+  .protocol-intro-col {
+    padding-right: 0;
+  }
+
+  .protocol-main-title {
+    font-size: 1.75rem;
+    line-height: 1.15;
+  }
+
+  .protocol-desc {
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+  }
+
+  .blueprint-card {
+    padding: 18px 14px;
+  }
+
+  /* Footer Mobile */
+  .site-footer {
+    padding: 30px 16px 20px;
+  }
+
+  .footer-container {
+    grid-template-columns: 1fr !important;
+    gap: 24px;
+    margin-bottom: 20px;
+  }
+
+  .footer-brand-col {
+    padding-right: 0;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-headline {
+    font-size: 1.65rem !important;
+  }
+  .brand-title {
+    font-size: 1.05rem;
+  }
+  .brand-tag {
     display: none;
   }
 }

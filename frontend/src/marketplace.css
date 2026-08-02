@@ -426,3 +426,51 @@
   font-weight: 800;
   color: var(--text-primary);
 }
+
+/* Marketplace Mobile Responsiveness */
+@media (max-width: 768px) {
+  .dedicated-marketplace-page {
+    padding: 20px 12px 60px;
+  }
+
+  .marketplace-main-title {
+    font-size: 1.8rem;
+  }
+
+  .marketplace-subtitle {
+    font-size: 0.88rem;
+  }
+
+  .marketplace-controls-container {
+    padding: 14px 12px;
+    gap: 12px;
+  }
+
+  .marketplace-items-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+
+  .mcp-item-card {
+    padding: 16px;
+  }
+
+  .item-detail-modal-card {
+    padding: 20px 14px;
+    max-width: 96vw;
+    margin: 8px;
+    max-height: 92vh;
+  }
+
+  .detail-modal-title {
+    font-size: 1.45rem;
+  }
+
+  .detail-install-snippet-box {
+    padding: 12px 14px;
+  }
+
+  .snippet-code-text {
+    font-size: 0.78rem;
+  }
+}
