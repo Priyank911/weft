@@ -2106,26 +2106,117 @@ body {
     overflow-x: auto;
   }
 
-  /* Footer Mobile */
+  /* Pre-Footer Section Mobile */
+  .prefooter-stats-section {
+    padding: 30px 0 20px;
+  }
+
+  .prefooter-container {
+    padding: 0 12px;
+  }
+
+  .prefooter-headline {
+    font-size: 1.75rem !important;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .title-agent-badge {
+    font-size: 0.8rem;
+    padding: 2px 10px;
+  }
+
+  .prefooter-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+
+  .counter-card-banner {
+    padding: 16px 14px;
+    border-radius: var(--radius-md);
+  }
+
+  .counter-banner-val {
+    font-size: 2.1rem !important;
+    word-break: break-all;
+    margin-bottom: 10px;
+  }
+
+  .counter-breakdown-row {
+    gap: 6px;
+    padding-top: 10px;
+  }
+
+  .telemetry-pill {
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  .prefooter-action-stack {
+    gap: 10px;
+  }
+
+  .prefooter-cta-btn {
+    width: 100%;
+    justify-content: center;
+    height: 44px;
+    font-size: 0.88rem;
+  }
+
+  .prefooter-stats-card {
+    padding: 14px;
+  }
+
+  .prefooter-stats-val {
+    font-size: 1.25rem;
+  }
+
+  /* Compact 2-Column Mobile Footer */
   .site-footer {
-    padding: 30px 16px 20px;
+    padding: 28px 14px 16px;
   }
 
   .footer-container {
-    grid-template-columns: 1fr !important;
-    gap: 24px;
-    margin-bottom: 20px;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 18px 12px;
+    margin-bottom: 16px;
   }
 
   .footer-brand-col {
+    grid-column: 1 / -1;
+    margin-bottom: 6px;
     padding-right: 0;
+  }
+
+  .footer-brand-header {
+    margin-bottom: 6px;
+  }
+
+  .footer-brand-subtext {
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+
+  .footer-col h5 {
+    font-size: 0.68rem;
+    margin-bottom: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .footer-col a,
+  .footer-link-btn {
+    font-size: 0.78rem;
+    margin-bottom: 5px;
   }
 
   .footer-bottom {
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
+    padding-top: 12px;
+    font-size: 0.7rem;
     text-align: center;
-    font-size: 0.72rem;
   }
 }
 
