@@ -59,6 +59,13 @@ router.post('/search', async (req, res, next) => {
         }
       } catch (e) {
         console.warn('[Marketplace] Weft AI Agent Search failed, falling back to local FTS:', e.message);
+      }
+
+      // aiSearchNanda can resolve with an empty array (invalid/placeholder key,
+      // no NANDA matches, or an internally-swallowed error) without throwing —
+      // fall back to FTS whenever it didn't actually produce results, not only
+      // when it threw.
+      if (results.length === 0) {
         try {
           const ftsQuery = buildFtsQuery(query);
           results = ftsQuery ? searchListingsFTS.all(ftsQuery, limit, offset) : [];
