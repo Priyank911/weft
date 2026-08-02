@@ -1875,6 +1875,24 @@ body {
 
 /* Comprehensive Mobile-First & Responsive Design System */
 @media (max-width: 768px) {
+  /* Announcement Ticker Bar Mobile */
+  .announcement-bar {
+    padding: 6px 8px 2px;
+  }
+
+  .announcement-inner-pill {
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    gap: 6px;
+    flex-wrap: wrap;
+    text-align: center;
+  }
+
+  .announcement-link {
+    font-size: 0.7rem;
+    padding: 1px 8px;
+  }
+
   /* Navigation Bar Mobile Styling */
   .site-header {
     top: 4px;
@@ -2028,6 +2046,64 @@ body {
 
   .blueprint-card {
     padding: 18px 14px;
+  }
+
+  /* Agent Terminal View Mobile (I'm an Agent View) */
+  .agent-terminal-section {
+    padding: 20px 12px 40px;
+  }
+
+  .agent-terminal-container {
+    padding: 14px 10px;
+  }
+
+  .agent-terminal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .terminal-header-title {
+    font-size: 0.76rem;
+  }
+
+  .machine-intro-box {
+    padding: 14px 12px;
+  }
+
+  .machine-btn-group {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .machine-btn-group .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .rpc-controls-row {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .rpc-select-input {
+    width: 100%;
+    font-size: 0.82rem;
+  }
+
+  .rpc-execute-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .output-payload-code {
+    padding: 12px 10px;
+    font-size: 0.75rem;
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   /* Footer Mobile */
