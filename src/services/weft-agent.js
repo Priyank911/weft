@@ -1,10 +1,17 @@
 import OpenAI from 'openai';
 import fetch from 'node-fetch';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-});
+let openaiClient = null;
+
+function getOpenAIClient() {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+    });
+  }
+  return openaiClient;
+}
 
 const NANDA_INDEX_URL = process.env.NANDA_INDEX_URL || 'https://nest.projectnanda.org';
 
@@ -15,6 +22,8 @@ export async function aiSearchNanda(query) {
   if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'sk-your-openai-key') {
     throw new Error('OPENAI_API_KEY is not set');
   }
+
+  const openai = getOpenAIClient();
 
   // 1. Fetch all agents from NANDA
   const response = await fetch(`${NANDA_INDEX_URL}/api/agents`);

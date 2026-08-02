@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import AdmZip from 'adm-zip';
 import { v4 as uuidv4 } from 'uuid';
-import { v2 as cloudinary } from 'cloudinary';
 import { getAssetsByListing } from '../db/index.js';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
@@ -14,14 +13,21 @@ const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 
+let cloudinary = null;
 let cloudinaryEnabled = false;
 if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
-  cloudinary.config({
-    cloud_name: CLOUDINARY_CLOUD_NAME,
-    api_key: CLOUDINARY_API_KEY,
-    api_secret: CLOUDINARY_API_SECRET
-  });
-  cloudinaryEnabled = true;
+  try {
+    const cloudinaryModule = await import('cloudinary');
+    cloudinary = cloudinaryModule.v2;
+    cloudinary.config({
+      cloud_name: CLOUDINARY_CLOUD_NAME,
+      api_key: CLOUDINARY_API_KEY,
+      api_secret: CLOUDINARY_API_SECRET
+    });
+    cloudinaryEnabled = true;
+  } catch (error) {
+    console.warn('[AssetProcessor] Cloudinary credentials are configured but the package is unavailable. Falling back to local disk storage.', error.message);
+  }
 } else {
   console.warn('[AssetProcessor] No valid Cloudinary credentials configured. Falling back to local disk storage.');
 }
@@ -120,7 +126,7 @@ export async function buildManifest(extractedFiles) {
       let role = 'asset';
       if (file.relativePath.toLowerCase().includes('readme')) role = 'documentation';
       else if (file.relativePath.toLowerCase().endsWith('.js') || file.relativePath.toLowerCase().endsWith('.py')) role = 'source';
-      
+
       return {
         relativePath: file.relativePath,
         role,

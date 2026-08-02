@@ -1,166 +1,340 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { getAgentById, getListingById, getSellerById, searchListingsFTS, searchListingsByFilter, createTransaction, updateTransactionStatus, updateTransactionPrava, getTransactionById, createLedgerEntry, incrementDownloadCount, logAgentUsage, getAssetsByListing } from '../db/index.js';
-import { createPaymentSession, getPaymentStatus, getMandateStatus } from '../services/prava.js';
+import {
+  getAgentById,
+  getListingById,
+  getUserById,
+  searchListingsFTS,
+  searchListingsByFilter,
+  createTransaction,
+  updateTransactionStatus,
+  updateTransactionPrava,
+  updateTransactionRental,
+  activateTransactionMandate,
+  getTransactionById,
+  incrementDownloadCount,
+  logAgentUsage,
+  settleSellerCredit
+} from '../db/index.js';
+import {
+  createPaymentSession,
+  getPaymentStatus,
+  reportPaymentStatus,
+  createMandate,
+  getMandateStatus,
+  listActiveMandates,
+  chargeMandate,
+  reportMandateCharge
+} from '../services/prava.js';
 import { getDeliveryPayload } from '../services/asset-processor.js';
-import { sendPurchaseConfirmation, sendRentalNotification, sendPurchaseCheckout, sendAssetSold } from '../services/linq.js';
-import { createMandate } from '../services/prava.js';
-import { sendTask, getAgentCard, handleTaskResponse } from '../services/a2a-client.js';
+import {
+  sendPurchaseConfirmation,
+  sendRentalNotification,
+  sendPurchaseCheckout,
+  sendAssetSold,
+  sendRentalConfirmation,
+  sendRentalSold
+} from '../services/linq.js';
+import { sendTask, getTaskStatus, handleTaskResponse } from '../services/a2a-client.js';
 import { semanticSearch } from '../services/openai.js';
 import { aiSearchNanda } from '../services/weft-agent.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 const LIVE_INTENT_PATTERN = /\b(rent|hire|live agent)\b/i;
-
 const STOPWORDS = new Set([
   'a', 'an', 'the', 'i', 'need', 'to', 'for', 'of', 'in', 'on', 'is', 'am',
   'want', 'me', 'my', 'please', 'can', 'you', 'find', 'looking', 'that', 'this'
 ]);
 
-// Build an FTS5 MATCH expression from a free-text query: drop stopwords and
-// OR-join the remaining terms so natural-language queries still match
-// listings that don't contain every word (FTS5 barewords default to AND).
+const isMockPayment = (transaction) => transaction.prava_session_id?.startsWith('mock_');
+const isMockMandate = (transaction) => transaction.prava_mandate_id?.startsWith('mock_');
+
 function buildFtsQuery(query) {
   const terms = query
     .toLowerCase()
     .split(/\W+/)
-    .filter(t => t.length > 1 && !STOPWORDS.has(t));
-  if (terms.length === 0) return null;
-  return terms.map(t => `"${t}"`).join(' OR ');
+    .filter((term) => term.length > 1 && !STOPWORDS.has(term));
+  return terms.length ? terms.map((term) => `"${term}"`).join(' OR ') : null;
+}
+
+function mockApprovalEnabled() {
+  return process.env.NODE_ENV !== 'production' && process.env.PRAVA_ALLOW_MOCK_APPROVAL === 'true';
+}
+
+function mockFallbackEnabled() {
+  return process.env.NODE_ENV !== 'production' && process.env.PRAVA_ENABLE_MOCK_FALLBACK === 'true';
+}
+
+function pravaCheckoutError(error) {
+  const providerMessage = error?.message || 'Unknown Prava error';
+  if (error?.providerCode === 'PRAVA_CONFIGURATION_ERROR') {
+    return new AppError('PRAVA_CONFIGURATION_ERROR', 502, providerMessage);
+  }
+  const isAuthenticationError = /status:\s*401|invalid api key|auth_1001/i.test(providerMessage);
+  const message = isAuthenticationError
+    ? 'Prava rejected the sandbox API key. Set PRAVA_API_KEY to an active sandbox key and restart the server.'
+    : 'Unable to create a Prava sandbox checkout. Verify PRAVA_API_URL and PRAVA_API_KEY, then try again.';
+
+  return new AppError('PRAVA_CHECKOUT_UNAVAILABLE', 502, message, {
+    provider_code: error?.code || null,
+    provider_message: providerMessage
+  });
+}
+
+function getBuyerUser(agent) {
+  return agent ? getUserById.get(agent.user_id) : null;
+}
+
+function rentalDuration(value) {
+  const duration = Number(value ?? 30);
+  if (!Number.isInteger(duration) || duration <= 0 || duration > 1440) {
+    throw new AppError('VALIDATION_ERROR', 400, 'duration_minutes must be a whole number between 1 and 1440');
+  }
+  return duration;
+}
+
+function rentalAmountCents(listing, durationMinutes) {
+  const price = Math.max(0, Number(listing.price_cents) || 0);
+  return listing.rate_type === 'per_minute' ? price * durationMinutes : price;
+}
+
+function rentalRateLabel(listing) {
+  const price = `$${((Number(listing.price_cents) || 0) / 100).toFixed(2)}`;
+  return listing.rate_type === 'per_minute' ? `${price}/min` : `${price}/${listing.rate_type || 'session'}`;
+}
+
+function extractChargeId(charge) {
+  return charge?.charge_id
+    || charge?.id
+    || charge?.transaction_id
+    || charge?.payment_id
+    || charge?.charge?.id
+    || null;
+}
+
+async function notifyPurchaseSettlement(transaction, listing, settlement) {
+  if (!settlement.credited) return;
+
+  const amount = `$${(transaction.amount_cents / 100).toFixed(2)}`;
+  const buyer = getBuyerUser(getAgentById.get(transaction.buyer_agent_id));
+  const seller = getUserById.get(settlement.seller.user_id);
+
+  if (buyer?.phone) {
+    await sendPurchaseConfirmation(buyer.phone, {
+      assetName: listing.title,
+      amount,
+      transactionId: transaction.id
+    });
+  }
+  if (seller?.phone) {
+    await sendAssetSold(seller.phone, {
+      assetName: listing.title,
+      amount,
+      transactionId: transaction.id
+    });
+  }
+}
+
+async function notifyRentalSettlement(transaction, listing, settlement) {
+  if (!settlement.credited) return;
+
+  const amount = `$${(transaction.amount_cents / 100).toFixed(2)}`;
+  const buyer = getBuyerUser(getAgentById.get(transaction.buyer_agent_id));
+  const seller = getUserById.get(settlement.seller.user_id);
+
+  if (buyer?.phone) {
+    await sendRentalConfirmation(buyer.phone, {
+      agentName: listing.title,
+      amount,
+      transactionId: transaction.id
+    });
+  }
+  if (seller?.phone) {
+    await sendRentalSold(seller.phone, {
+      agentName: listing.title,
+      amount,
+      transactionId: transaction.id
+    });
+  }
+}
+
+/**
+ * Charges only after the A2A task completed, then atomically marks the
+ * transaction captured and credits the seller. A stable idempotency key protects
+ * retries after a Prava/network failure.
+ */
+async function settleCompletedRental(transaction, listing) {
+  if (transaction.status === 'captured') {
+    return {
+      already_settled: true,
+      settlement_mode: isMockMandate(transaction) ? 'mock' : 'prava',
+      seller_credited: false
+    };
+  }
+  if (transaction.status !== 'approved') {
+    throw new AppError('PAYMENT_REQUIRED', 402, 'Rental mandate has not been approved yet.');
+  }
+
+  let chargeId = null;
+  let settlementMode = 'mock';
+  if (!isMockMandate(transaction)) {
+    settlementMode = 'prava';
+    const charge = await chargeMandate(transaction.prava_mandate_id, {
+      amount: (transaction.amount_cents / 100).toFixed(2),
+      merchantName: process.env.WEFT_MERCHANT_NAME || 'Weft Marketplace',
+      merchantUrl: process.env.WEFT_MERCHANT_URL || 'https://weft.marketplace',
+      merchantCountry: process.env.WEFT_MERCHANT_COUNTRY || 'US',
+      products: [{
+        description: `Completed rental: ${listing.title}`,
+        unit_price: (transaction.amount_cents / 100).toFixed(2),
+        quantity: 1
+      }],
+      idempotencyKey: `weft-rental-${transaction.id}`
+    });
+
+    chargeId = extractChargeId(charge);
+    if (!chargeId || charge.status !== 'awaiting_result' || charge.fetchStatus !== 'SUCCESS') {
+      throw new AppError('PRAVA_CHARGE_FAILED', 502, 'Prava did not create a reportable mandate charge.', {
+        provider_status: charge.status || null,
+        provider_fetch_status: charge.fetchStatus || null
+      });
+    }
+    await reportMandateCharge(transaction.prava_mandate_id, chargeId, {
+      txn_status: 'APPROVED',
+      response_code: '00',
+      amount_paid: (transaction.amount_cents / 100).toFixed(2)
+    });
+  }
+
+  const settlement = settleSellerCredit({
+    transactionId: transaction.id,
+    sellerId: listing.seller_id,
+    amountCents: transaction.amount_cents,
+    description: `Live agent rental: ${listing.title}`,
+    status: 'captured'
+  });
+
+  if (settlement.credited) {
+    incrementDownloadCount.run(listing.id);
+    await notifyRentalSettlement(transaction, listing, settlement);
+  }
+
+  return {
+    already_settled: false,
+    settlement_mode: settlementMode,
+    charge_id: chargeId,
+    seller_credited: settlement.credited
+  };
+}
+
+async function requireCompletedRentalTask(transaction, listing) {
+  if (!transaction.rental_task_id) {
+    throw new AppError('VALIDATION_ERROR', 400, 'No rental task exists to settle.');
+  }
+
+  const response = await getTaskStatus(listing.a2a_endpoint_url, transaction.rental_task_id);
+  const task = handleTaskResponse(response);
+  if (task.status !== 'completed') {
+    throw new AppError('CONFLICT', 409, `Rental task is not complete. Current status: ${task.status || 'unknown'}`);
+  }
+  return task;
 }
 
 const router = Router();
 
-// ID-based search: validates agent_id, logs usage, returns metadata only
+// ID-based search: validates agent_id, logs usage, returns metadata only.
 router.post('/search', async (req, res, next) => {
   try {
     const { agent_id, query, category, listing_type, max_price_cents } = req.body;
-    
-    // 1. Validate agent_id
     if (!agent_id) throw new AppError('VALIDATION_ERROR', 400, 'agent_id is required');
-    const agent = getAgentById.get(agent_id);
-    if (!agent) throw new AppError('NOT_FOUND', 404, 'Agent not found. Please register first using register_agent.');
-    
-    // 2. Search listings
+    if (!getAgentById.get(agent_id)) {
+      throw new AppError('NOT_FOUND', 404, 'Agent not found. Please register first using register_agent.');
+    }
+
     const limit = 20;
-    const offset = 0;
     let results = [];
-    
     if (query && process.env.OPENAI_API_KEY) {
       try {
         const nandaIds = await aiSearchNanda(query);
-        if (nandaIds && nandaIds.length > 0) {
-          console.log('[Marketplace] Weft Agent returned NANDA IDs:', nandaIds);
-          // Cross-reference with local DB to ensure only trusted/verified Weft assets are returned
-          results = nandaIds.map(id => {
-            const cleanId = id.replace(/^(skill|agent|tool)-/, '');
-            return getListingById.get(cleanId);
-          }).filter(Boolean);
-        }
-      } catch (e) {
-        console.warn('[Marketplace] Weft AI Agent Search failed, falling back to local FTS:', e.message);
+        results = (nandaIds || [])
+          .map((id) => getListingById.get(id.replace(/^(skill|agent|tool)-/, '')))
+          .filter(Boolean);
+      } catch (error) {
+        console.warn('[Marketplace] NANDA AI search failed; falling back to local FTS:', error.message);
       }
+    }
 
-      // aiSearchNanda can resolve with an empty array (invalid/placeholder key,
-      // no NANDA matches, or an internally-swallowed error) without throwing —
-      // fall back to FTS whenever it didn't actually produce results, not only
-      // when it threw.
-      if (results.length === 0) {
-        try {
-          const ftsQuery = buildFtsQuery(query);
-          results = ftsQuery ? searchListingsFTS.all(ftsQuery, limit, offset) : [];
-        } catch (ftsError) {
-          results = searchListingsByFilter.all(
-            category || null, category || null,
-            listing_type || null, listing_type || null,
-            max_price_cents || null, max_price_cents || null,
-            limit, offset
-          );
-        }
-      }
-    } else if (query) {
+    if (results.length === 0 && query) {
       try {
         const ftsQuery = buildFtsQuery(query);
-        results = ftsQuery ? searchListingsFTS.all(ftsQuery, limit, offset) : [];
-      } catch (e) {
-        // FTS fallback
+        results = ftsQuery ? searchListingsFTS.all(ftsQuery, limit, 0) : [];
+      } catch (error) {
         results = searchListingsByFilter.all(
           category || null, category || null,
           listing_type || null, listing_type || null,
           max_price_cents || null, max_price_cents || null,
-          limit, offset
+          limit, 0
         );
       }
-    } else {
+    }
+    if (!query) {
       results = searchListingsByFilter.all(
         category || null, category || null,
         listing_type || null, listing_type || null,
         max_price_cents || null, max_price_cents || null,
-        limit, offset
+        limit, 0
       );
     }
-    
-    // 3. Rank live-agent results semantically when relevant (relevance ranking, not raw SQL order)
-    const hasLiveResults = results.some(r => r.listing_type === 'live');
-    const suggestsLiveIntent = query && LIVE_INTENT_PATTERN.test(query);
-    if (query && (hasLiveResults || suggestsLiveIntent) && results.length > 0) {
+
+    if (query && results.length && (results.some((result) => result.listing_type === 'live') || LIVE_INTENT_PATTERN.test(query))) {
       try {
         results = await semanticSearch(query, results);
-      } catch (e) {
-        console.warn('[Marketplace] Semantic search ranking failed, using raw order:', e.message);
+      } catch (error) {
+        console.warn('[Marketplace] Semantic ranking failed; keeping FTS order:', error.message);
       }
     }
 
-    // 4. Log usage
-    const usageId = uuidv4();
-    logAgentUsage.run(usageId, agent_id, 'search', null, query || 'browse', `Found ${results.length} results`);
-
-    // 5. Return METADATA ONLY (no download URLs)
-    const safeResults = results.map(r => ({
-      id: r.id,
-      title: r.title,
-      description: r.description,
-      category: r.category,
-      listing_type: r.listing_type,
-      price_cents: r.price_cents,
-      currency: r.currency,
-      rate_type: r.rate_type,
-      tags: r.tags,
-      capabilities: r.capabilities,
-      sample_description: r.sample_description,
-      download_count: r.download_count,
-      is_free: r.price_cents === 0,
-      guidance: r.price_cents === 0 
-        ? "Free asset. Use 'install' tool to get it immediately."
-        : `Premium asset ($${(r.price_cents / 100).toFixed(2)}). Use 'purchase' tool — user must approve payment.`
+    logAgentUsage.run(uuidv4(), agent_id, 'search', null, query || 'browse', `Found ${results.length} results`);
+    const safeResults = results.map((result) => ({
+      id: result.id,
+      title: result.title,
+      description: result.description,
+      category: result.category,
+      listing_type: result.listing_type,
+      price_cents: result.price_cents,
+      currency: result.currency,
+      rate_type: result.rate_type,
+      tags: result.tags,
+      capabilities: result.capabilities,
+      sample_description: result.sample_description,
+      download_count: result.download_count,
+      is_free: result.price_cents === 0,
+      guidance: result.price_cents === 0
+        ? "Free asset. Use 'install' to get it immediately."
+        : `Premium asset ($${(result.price_cents / 100).toFixed(2)}). Use 'purchase' and obtain human approval.`
     }));
-    
+
     res.json({ data: { agent_id, results: safeResults, total: safeResults.length } });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 });
 
-// Purchase premium asset
+// Create a Prava payment session for a premium static asset.
 router.post('/purchase', async (req, res, next) => {
   try {
     const { agent_id, listing_id } = req.body;
     if (!agent_id || !listing_id) throw new AppError('VALIDATION_ERROR', 400, 'agent_id and listing_id required');
-    
+
     const agent = getAgentById.get(agent_id);
     if (!agent) throw new AppError('NOT_FOUND', 404, 'Agent not found');
-    
-    // Fetch the real user to get their actual email
-    const { getUserById } = await import('../db/index.js');
-    const user = getUserById.get(agent.user_id);
-    const realEmail = user ? user.email : 'buyer@weft.marketplace';
-    
     const listing = getListingById.get(listing_id);
     if (!listing) throw new AppError('NOT_FOUND', 404, 'Listing not found');
     if (listing.price_cents <= 0) throw new AppError('VALIDATION_ERROR', 400, 'This listing is free. Use /install instead.');
-    
-    // Create Prava payment session
+
+    const buyer = getBuyerUser(agent);
     let session;
+    let isMock = false;
     try {
       session = await createPaymentSession({
         totalAmount: (listing.price_cents / 100).toFixed(2),
@@ -170,228 +344,203 @@ router.post('/purchase', async (req, res, next) => {
         merchantCountry: process.env.WEFT_MERCHANT_COUNTRY || 'US',
         products: [{ description: listing.title, unit_price: (listing.price_cents / 100).toFixed(2), quantity: 1 }],
         userId: agent.user_id,
-        userEmail: realEmail
+        userEmail: buyer?.email || 'buyer@weft.marketplace'
       });
-    } catch (e) {
-      console.warn('[Marketplace] Prava session failed, creating mock:', e.message);
-      session = { session_id: `mock_${uuidv4()}`, payment_url: `https://checkout.prava.space/mock/${uuidv4()}` };
+    } catch (error) {
+      if (!mockFallbackEnabled()) throw pravaCheckoutError(error);
+      console.warn('[Marketplace] Prava session failed; using explicitly enabled local mock:', error.message);
+      isMock = true;
+      session = {
+        session_id: `mock_${uuidv4()}`,
+        payment_url: `https://checkout.prava.space/mock/${uuidv4()}`
+      };
     }
-    
-    // Create transaction
-    const txId = uuidv4();
+
+    const transactionId = uuidv4();
+    const paymentUrl = session.payment_url || session.iframe_url || null;
     createTransaction.run(
-      txId, agent_id, listing_id,
+      transactionId, agent_id, listing_id,
       listing.price_cents, listing.currency || 'USD',
       'purchase', 'awaiting_approval',
-      session.session_id, session.payment_url || session.iframe_url,
+      session.session_id, paymentUrl,
       null, null
     );
-    
-    // Send Linq notification to buyer
-    if (user && user.phone) {
-      await sendPurchaseCheckout(user.phone, {
+
+    let notification = { sent: false, skipped: true, reason: 'Buyer has no registered phone number' };
+    if (buyer?.phone && !isMock) {
+      notification = await sendPurchaseCheckout(buyer.phone, {
         assetName: listing.title,
         amount: `$${(listing.price_cents / 100).toFixed(2)}`,
-        transactionId: txId,
-        paymentUrl: session.payment_url || session.iframe_url
+        transactionId,
+        paymentUrl
       });
     }
 
-    // Log usage
-    const usageId = uuidv4();
-    logAgentUsage.run(usageId, agent_id, 'purchase', listing_id, `Purchase ${listing.title}`, 'awaiting_approval');
-    
+    logAgentUsage.run(uuidv4(), agent_id, 'purchase', listing_id, `Purchase ${listing.title}`, 'awaiting_approval');
     res.json({
       data: {
-        transaction_id: txId,
-        payment_url: session.payment_url || session.iframe_url,
+        transaction_id: transactionId,
+        payment_url: paymentUrl,
         amount_cents: listing.price_cents,
         currency: listing.currency || 'USD',
         status: 'awaiting_approval',
-        message: `Please approve payment of $${(listing.price_cents / 100).toFixed(2)} at the payment_url`
+        is_mock: isMock,
+        notification,
+        message: isMock
+          ? 'Prava is unavailable, so this is a sandbox mock session. Use the explicit simulate-approval action to continue.'
+          : `Please approve payment of $${(listing.price_cents / 100).toFixed(2)} at the payment_url.`
       }
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 });
 
-// Check purchase status
 router.get('/purchase/:txId/status', async (req, res, next) => {
   try {
     const tx = getTransactionById.get(req.params.txId);
     if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
-    
-    // Try checking Prava status
-    let currentStatus = tx.status;
-    if (tx.prava_session_id && tx.status === 'awaiting_approval' && !tx.prava_session_id.startsWith('mock_')) {
+
+    let status = tx.status;
+    if (tx.status === 'awaiting_approval' && tx.prava_session_id && !isMockPayment(tx)) {
       try {
-        const pravaResult = await getPaymentStatus(tx.prava_session_id);
-        if (pravaResult.payment_succeeded) {
-          currentStatus = 'approved';
-          updateTransactionStatus.run('approved', tx.id);
+        const prava = await getPaymentStatus(tx.prava_session_id);
+        if (prava.payment_ready || prava.payment_succeeded) {
+          updateTransactionPrava.run(tx.prava_session_id, tx.prava_payment_url, 'approved', tx.id);
+          status = 'approved';
         }
-      } catch (e) {
-        console.warn('[Marketplace] Prava status check failed:', e.message);
+      } catch (error) {
+        console.warn('[Marketplace] Prava status check failed:', error.message);
       }
     }
-    
-    res.json({ data: { transaction_id: tx.id, status: currentStatus, payment_url: tx.prava_payment_url } });
-  } catch (err) {
-    next(err);
+
+    res.json({ data: { transaction_id: tx.id, status, payment_url: tx.prava_payment_url, is_mock: isMockPayment(tx) } });
+  } catch (error) {
+    next(error);
   }
 });
 
-// Deliver purchased asset
+// This cannot approve a real Prava session. It exists solely for a locally-created
+// mock session and is disabled by default in production.
+router.post('/purchase/:txId/simulate-approval', async (req, res, next) => {
+  try {
+    const tx = getTransactionById.get(req.params.txId);
+    if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
+    if (tx.type !== 'purchase') throw new AppError('VALIDATION_ERROR', 400, 'Transaction is not a marketplace purchase');
+    if (!isMockPayment(tx)) throw new AppError('VALIDATION_ERROR', 400, 'Only mock payment sessions can be simulated');
+    if (!mockApprovalEnabled()) throw new AppError('FORBIDDEN', 403, 'Mock payment approval is disabled in this environment');
+
+    if (tx.status !== 'delivered') updateTransactionStatus.run('approved', tx.id);
+    res.json({ data: { transaction_id: tx.id, status: tx.status === 'delivered' ? 'delivered' : 'approved', simulated: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/purchase/:txId/deliver', async (req, res, next) => {
   try {
     const tx = getTransactionById.get(req.params.txId);
     if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
-    
-    // If not yet approved, verify with Prava first
-    if (tx.status === 'awaiting_approval' && tx.prava_session_id && !tx.prava_session_id.startsWith('mock_')) {
-      try {
-        const pravaResult = await getPaymentStatus(tx.prava_session_id);
-        console.log(`[Marketplace] Prava payment verification for session ${tx.prava_session_id}: succeeded=${pravaResult.payment_succeeded}, order_id=${pravaResult.order_id}, raw_status=${pravaResult.raw_status}`);
-        if (pravaResult.payment_succeeded) {
-          // Store the Prava order ID on the transaction for audit
-          if (pravaResult.order_id) {
-            updateTransactionPrava.run(tx.prava_session_id, tx.prava_payment_url, 'approved', tx.id);
-          } else {
-            updateTransactionStatus.run('approved', tx.id);
-          }
-          tx.status = 'approved';
-        } else {
-          throw new AppError('PAYMENT_REQUIRED', 402, `Payment not approved yet. Prava raw status: ${pravaResult.raw_status}. Current status: ${tx.status}`);
-        }
-      } catch (pravaErr) {
-        if (pravaErr.code === 'PAYMENT_REQUIRED') throw pravaErr;
-        console.warn('[Marketplace] Prava verification failed, checking local status:', pravaErr.message);
-      }
+    const listing = getListingById.get(tx.listing_id);
+    if (!listing) throw new AppError('NOT_FOUND', 404, 'Listing not found');
+
+    if (tx.status === 'delivered') {
+      const payload = await getDeliveryPayload(tx.listing_id);
+      return res.json({ data: { ...payload, transaction_id: tx.id, already_delivered: true } });
     }
-    
-    if (!['approved', 'captured'].includes(tx.status)) {
+
+    let prava;
+    if (!isMockPayment(tx) && tx.prava_session_id) {
+      prava = await getPaymentStatus(tx.prava_session_id);
+      if (!prava.payment_ready && !prava.payment_succeeded) {
+        throw new AppError('PAYMENT_REQUIRED', 402, `Payment not approved yet. Prava status: ${prava.raw_status}.`);
+      }
+      updateTransactionPrava.run(tx.prava_session_id, tx.prava_payment_url, 'approved', tx.id);
+      tx.status = 'approved';
+    }
+
+    if (isMockPayment(tx) && tx.status === 'awaiting_approval') {
+      throw new AppError('PAYMENT_REQUIRED', 402, 'Mock payment has not been approved. Use the sandbox simulation action first.');
+    }
+    if (tx.status !== 'approved') {
       throw new AppError('PAYMENT_REQUIRED', 402, `Payment not approved yet. Current status: ${tx.status}`);
     }
-    
-    // Prepare delivery
-    const assets = getAssetsByListing.all(tx.listing_id);
-    const deliveryPayload = await getDeliveryPayload(tx.listing_id, assets);
-    
-    // Update transaction to delivered
-    updateTransactionStatus.run('delivered', tx.id);
-    
-    // Credit seller — only after Prava verification passed
-    const listing = getListingById.get(tx.listing_id);
-    const { getUserById } = await import('../db/index.js');
-    if (listing) {
-      const seller = getSellerById.get(listing.seller_id);
-      if (seller) {
-        const newBalance = seller.payout_balance_cents + tx.amount_cents;
-        const ledgerId = uuidv4();
-        createLedgerEntry.run(ledgerId, listing.seller_id, tx.id, tx.amount_cents, 'credit', newBalance, `Sale: ${listing.title}`);
-        // Update seller balance
-        import('../db/index.js').then(db => {
-          db.updateSellerBalance.run(newBalance, listing.seller_id);
-        });
 
-        // Notify Seller via Linq
-        const sellerUser = getUserById.get(seller.user_id);
-        if (sellerUser && sellerUser.phone) {
-          try {
-            await sendAssetSold(sellerUser.phone, {
-              assetName: listing.title,
-              amount: `$${(tx.amount_cents / 100).toFixed(2)}`,
-              transactionId: tx.id
-            });
-          } catch (e) {
-            console.warn('[Marketplace] Linq seller notification failed:', e.message);
-          }
-        }
+    const payload = await getDeliveryPayload(tx.listing_id);
+    if (prava?.payment_ready && !prava.payment_succeeded) {
+      if (!prava.transaction_reference) {
+        throw new AppError('PRAVA_PAYMENT_UNREPORTABLE', 502, 'Prava returned an approved checkout without a transaction reference.');
       }
+      await reportPaymentStatus(tx.prava_session_id, prava.transaction_reference, {
+        txn_status: 'APPROVED',
+        response_code: '00',
+        amount_paid: (tx.amount_cents / 100).toFixed(2)
+      });
+    }
+    const settlement = settleSellerCredit({
+      transactionId: tx.id,
+      sellerId: listing.seller_id,
+      amountCents: tx.amount_cents,
+      description: `Sale: ${listing.title}`,
+      status: 'delivered'
+    });
+    if (settlement.credited) {
       incrementDownloadCount.run(tx.listing_id);
-    }
-    
-    // Notify Buyer via Linq
-    const agent = getAgentById.get(tx.buyer_agent_id);
-    if (agent) {
-      const buyerUser = getUserById.get(agent.user_id);
-      if (buyerUser && buyerUser.phone) {
-        try {
-          await sendPurchaseConfirmation(buyerUser.phone, {
-            assetName: listing ? listing.title : 'Asset',
-            amount: `$${(tx.amount_cents / 100).toFixed(2)}`,
-            transactionId: tx.id
-          });
-        } catch (e) {
-          console.warn('[Marketplace] Linq buyer notification failed:', e.message);
-        }
-      }
+      await notifyPurchaseSettlement(tx, listing, settlement);
     }
 
-    // Log usage
-    const usageId = uuidv4();
-    logAgentUsage.run(usageId, tx.buyer_agent_id, 'download', tx.listing_id, 'Delivered', 'success');
-    
-    res.json({ data: deliveryPayload });
-  } catch (err) {
-    next(err);
+    logAgentUsage.run(uuidv4(), tx.buyer_agent_id, 'download', tx.listing_id, 'Delivered', 'success');
+    res.json({ data: { ...payload, transaction_id: tx.id, already_delivered: false } });
+  } catch (error) {
+    next(error);
   }
 });
 
-// Install free asset
 router.post('/install', async (req, res, next) => {
   try {
     const { agent_id, listing_id } = req.body;
     if (!agent_id || !listing_id) throw new AppError('VALIDATION_ERROR', 400, 'agent_id and listing_id required');
-    
-    const agent = getAgentById.get(agent_id);
-    if (!agent) throw new AppError('NOT_FOUND', 404, 'Agent not found');
-    
+    if (!getAgentById.get(agent_id)) throw new AppError('NOT_FOUND', 404, 'Agent not found');
+
     const listing = getListingById.get(listing_id);
     if (!listing) throw new AppError('NOT_FOUND', 404, 'Listing not found');
     if (listing.price_cents > 0) throw new AppError('PAYMENT_REQUIRED', 402, 'This listing is not free. Use /purchase instead.');
-    
-    // Create transaction record
-    const txId = uuidv4();
+
+    const transactionId = uuidv4();
     createTransaction.run(
-      txId, agent_id, listing_id,
+      transactionId, agent_id, listing_id,
       0, listing.currency || 'USD',
       'free_install', 'delivered',
       null, null, null, null
     );
-    
-    // Deliver immediately
-    const deliveryPayload = await getDeliveryPayload(listing_id);
+
+    const payload = await getDeliveryPayload(listing_id);
     incrementDownloadCount.run(listing_id);
-    
-    // Log usage
-    const usageId = uuidv4();
-    logAgentUsage.run(usageId, agent_id, 'install', listing_id, `Install ${listing.title}`, 'delivered');
-    
-    res.json({ data: deliveryPayload });
-  } catch (err) {
-    next(err);
+    logAgentUsage.run(uuidv4(), agent_id, 'install', listing_id, `Install ${listing.title}`, 'delivered');
+    res.json({ data: { ...payload, transaction_id: transactionId } });
+  } catch (error) {
+    next(error);
   }
 });
 
-// Rent live agent
+// Create a single-charge mandate. The estimated amount is priced per minute only
+// when the listing declares rate_type=per_minute; all other rate types are fixed.
 router.post('/rent', async (req, res, next) => {
   try {
     const { agent_id, listing_id, duration_minutes, task_description } = req.body;
     if (!agent_id || !listing_id) throw new AppError('VALIDATION_ERROR', 400, 'agent_id and listing_id required');
-    
+
     const agent = getAgentById.get(agent_id);
     if (!agent) throw new AppError('NOT_FOUND', 404, 'Agent not found');
-    
     const listing = getListingById.get(listing_id);
     if (!listing) throw new AppError('NOT_FOUND', 404, 'Listing not found');
     if (listing.listing_type !== 'live') throw new AppError('VALIDATION_ERROR', 400, 'This listing is not a live agent');
-    
-    const estimatedCost = Math.ceil((listing.price_cents / 60) * (duration_minutes || 30));
-    
-    // Create mandate via Prava
+
+    const duration = rentalDuration(duration_minutes);
+    const estimatedCost = rentalAmountCents(listing, duration);
+    const buyer = getBuyerUser(agent);
     let mandate;
+    let isMock = false;
     try {
       mandate = await createMandate({
         amount: (estimatedCost / 100).toFixed(2),
@@ -401,142 +550,216 @@ router.post('/rent', async (req, res, next) => {
         merchantCountry: process.env.WEFT_MERCHANT_COUNTRY || 'US',
         frequency: 'one_time',
         maxCharges: 1,
-        products: [{ description: `Rental: ${listing.title} for ${duration_minutes || 30} minutes` }],
+        products: [{
+          description: `Rental: ${listing.title} for up to ${duration} minutes`,
+          unit_price: (estimatedCost / 100).toFixed(2),
+          quantity: 1
+        }],
         userId: agent.user_id,
-        userEmail: 'buyer@weft.marketplace'
+        userEmail: buyer?.email || 'buyer@weft.marketplace'
       });
-    } catch (e) {
-      console.warn('[Marketplace] Prava mandate failed, creating mock:', e.message);
-      mandate = { session_id: `mock_mdt_${uuidv4()}`, approval_url: `https://checkout.prava.space/mock/${uuidv4()}` };
+    } catch (error) {
+      if (!mockFallbackEnabled()) throw pravaCheckoutError(error);
+      console.warn('[Marketplace] Prava mandate failed; using explicitly enabled local mock:', error.message);
+      isMock = true;
+      mandate = {
+        mandate_id: `mock_mdt_${uuidv4()}`,
+        approval_url: `https://checkout.prava.space/mock/${uuidv4()}`
+      };
     }
-    
-    // Create transaction
-    const txId = uuidv4();
+
+    const transactionId = uuidv4();
+    const mandateId = mandate.mandate_id || null;
+    const approvalUrl = mandate.approval_url || mandate.payment_url || mandate.iframe_url || null;
     createTransaction.run(
-      txId, agent_id, listing_id,
+      transactionId, agent_id, listing_id,
       estimatedCost, listing.currency || 'USD',
-      'rental', 'pending',
-      null, null,
-      mandate.session_id || mandate.mandate_id,
-      duration_minutes || 30
+      'rental', 'awaiting_approval',
+      mandate.session_id || null, approvalUrl,
+      mandateId, duration
     );
-    
-    // Send Linq notification
-    try {
-      await sendRentalNotification(process.env.LINQ_PHONE_NUMBER, {
+
+    // LINQ_PHONE_NUMBER is always the sender. The buyer's registered phone is the recipient.
+    let notification = { sent: false, skipped: true, reason: 'Buyer has no registered phone number' };
+    if (buyer?.phone && !isMock) {
+      notification = await sendRentalNotification(buyer.phone, {
         agentName: listing.title,
-        duration: `${duration_minutes || 30} minutes`,
-        rate: `$${(listing.price_cents / 100).toFixed(2)}/hr`,
+        duration: `${duration} minutes`,
+        rate: rentalRateLabel(listing),
         maxAmount: `$${(estimatedCost / 100).toFixed(2)}`,
-        approvalUrl: mandate.approval_url || mandate.payment_url || ''
+        approvalUrl
       });
-    } catch (e) {
-      console.warn('[Marketplace] Linq notification failed:', e.message);
     }
-    
-    // Log usage
-    const usageId = uuidv4();
-    logAgentUsage.run(usageId, agent_id, 'rent', listing_id, task_description || 'Rental request', 'pending');
-    
+
+    logAgentUsage.run(uuidv4(), agent_id, 'rent', listing_id, task_description || 'Rental request', 'awaiting_approval');
     res.json({
       data: {
-        transaction_id: txId,
-        approval_url: mandate.approval_url || mandate.payment_url || '',
+        transaction_id: transactionId,
+        approval_url: approvalUrl,
         estimated_cost_cents: estimatedCost,
         currency: listing.currency || 'USD',
-        duration_minutes: duration_minutes || 30,
-        message: `Rental of ${listing.title} for ${duration_minutes || 30} min. Approve at the approval_url.`
+        duration_minutes: duration,
+        status: 'awaiting_approval',
+        is_mock: isMock,
+        notification,
+        message: isMock
+          ? `Mock rental created for ${listing.title}. Approve it with the sandbox simulation action.`
+          : `Rental of ${listing.title} for ${duration} minutes. Approve at the approval_url.`
       }
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 });
 
-// Check rental mandate status
 router.get('/rent/:txId/status', async (req, res, next) => {
   try {
     const tx = getTransactionById.get(req.params.txId);
     if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
 
-    // Try checking Prava mandate status
-    let currentStatus = tx.status;
-    if (tx.prava_mandate_id && tx.status === 'pending') {
+    let status = tx.status;
+    if (tx.status === 'awaiting_approval' && !isMockMandate(tx)) {
       try {
-        const mandateStatus = await getMandateStatus(tx.prava_mandate_id);
-        const status = mandateStatus?.status || mandateStatus?.mandate_status;
-        if (status === 'completed' || status === 'confirmed' || status === 'approved' || status === 'active') {
-          currentStatus = 'approved';
-          updateTransactionStatus.run('approved', tx.id);
-        } else if (status === 'failed' || status === 'declined' || status === 'cancelled') {
-          currentStatus = 'failed';
-          updateTransactionStatus.run('failed', tx.id);
+        const buyerAgent = getAgentById.get(tx.buyer_agent_id);
+        let mandateId = tx.prava_mandate_id;
+
+        if (!mandateId && tx.prava_session_id) {
+          const session = await getPaymentStatus(tx.prava_session_id);
+          mandateId = session.mandate_id;
         }
-      } catch (e) {
-        console.warn('[Marketplace] Prava mandate status check failed:', e.message);
+        if (!mandateId) {
+          const candidates = await listActiveMandates(buyerAgent?.user_id || tx.buyer_agent_id, {
+            merchantName: process.env.WEFT_MERCHANT_NAME || 'Weft Marketplace',
+            amount: (tx.amount_cents / 100).toFixed(2)
+          });
+          mandateId = candidates[0]?.id || null;
+        }
+
+        if (mandateId) {
+          const mandate = await getMandateStatus(mandateId);
+          const mandateStatus = mandate?.status || mandate?.mandate_status;
+          if (['completed', 'confirmed', 'approved', 'active'].includes(mandateStatus)) {
+            activateTransactionMandate.run(mandateId, tx.id);
+            status = 'approved';
+          } else if (['failed', 'declined', 'cancelled'].includes(mandateStatus)) {
+            updateTransactionStatus.run('failed', tx.id);
+            status = 'failed';
+          }
+        }
+      } catch (error) {
+        console.warn('[Marketplace] Prava mandate status check failed:', error.message);
       }
     }
 
-    res.json({ data: { transaction_id: tx.id, status: currentStatus, approval_url: tx.prava_payment_url } });
-  } catch (err) {
-    next(err);
+    res.json({
+      data: {
+        transaction_id: tx.id,
+        status,
+        approval_url: tx.prava_payment_url,
+        is_mock: isMockMandate(tx)
+      }
+    });
+  } catch (error) {
+    next(error);
   }
 });
 
-// Execute task on rented live agent (A2A)
+router.post('/rent/:txId/simulate-approval', async (req, res, next) => {
+  try {
+    const tx = getTransactionById.get(req.params.txId);
+    if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
+    if (tx.type !== 'rental') throw new AppError('VALIDATION_ERROR', 400, 'Transaction is not a live-agent rental');
+    if (!isMockMandate(tx)) throw new AppError('VALIDATION_ERROR', 400, 'Only mock rental mandates can be simulated');
+    if (!mockApprovalEnabled()) throw new AppError('FORBIDDEN', 403, 'Mock mandate approval is disabled in this environment');
+
+    if (tx.status === 'awaiting_approval') updateTransactionStatus.run('approved', tx.id);
+    res.json({ data: { transaction_id: tx.id, status: tx.status === 'awaiting_approval' ? 'approved' : tx.status, simulated: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Retries settlement without running the live agent again. This is useful if an
+// A2A task completed but Prava returned a transient network/provider error.
+router.post('/rent/:txId/settle', async (req, res, next) => {
+  try {
+    const tx = getTransactionById.get(req.params.txId);
+    if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
+    const listing = getListingById.get(tx.listing_id);
+    if (!listing || !listing.a2a_endpoint_url) throw new AppError('VALIDATION_ERROR', 400, 'No A2A endpoint configured for this listing');
+
+    await requireCompletedRentalTask(tx, listing);
+    const settlement = await settleCompletedRental(tx, listing);
+    res.json({ data: { transaction_id: tx.id, task_id: tx.rental_task_id, status: 'completed', settlement } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/rent/:txId/execute', async (req, res, next) => {
   try {
     const { message } = req.body;
     const tx = getTransactionById.get(req.params.txId);
     if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
-    if (!['approved', 'captured'].includes(tx.status)) {
-      throw new AppError('PAYMENT_REQUIRED', 402, 'Rental payment has not been approved yet. Check status with get_rental_status before executing tasks.');
+    if (tx.status === 'captured') {
+      return res.json({
+        data: {
+          task_id: tx.rental_task_id,
+          status: 'completed',
+          already_settled: true,
+          message: 'This rental has already completed and been settled. Use a new rental for another task.'
+        }
+      });
+    }
+    if (tx.status !== 'approved') {
+      throw new AppError('PAYMENT_REQUIRED', 402, 'Rental mandate has not been approved yet. Check status before executing tasks.');
     }
 
     const listing = getListingById.get(tx.listing_id);
     if (!listing || !listing.a2a_endpoint_url) {
       throw new AppError('VALIDATION_ERROR', 400, 'No A2A endpoint configured for this listing');
     }
-    
-    // Send A2A task
+    if (typeof message !== 'string' || !message.trim()) {
+      throw new AppError('VALIDATION_ERROR', 400, 'message is required to execute a rental task');
+    }
+
     const taskId = tx.rental_task_id || uuidv4();
+    const result = await sendTask(listing.a2a_endpoint_url, { taskId, message });
+    const task = handleTaskResponse(result);
+
+    // Preserve the task ID synchronously before attempting any payment call so a
+    // settlement retry can inspect the completed task without re-running it.
+    updateTransactionRental.run(taskId, 'approved', tx.id);
+
+    const response = {
+      task_id: taskId,
+      status: task.status,
+      result: task.output ?? (task.artifacts?.length ? task.artifacts : null),
+      clarification_needed: task.status === 'input-required',
+      question: task.clarificationQuestion || null
+    };
+
+    if (task.status !== 'completed') {
+      return res.json({ data: response });
+    }
+
     try {
-      const result = await sendTask(listing.a2a_endpoint_url, {
-        taskId,
-        message: message || 'Execute task'
-      });
-      
-      const parsed = handleTaskResponse(result);
-      
-      // Update transaction with task ID
-      if (!tx.rental_task_id) {
-        import('../db/index.js').then(db => {
-          db.updateTransactionRental.run(taskId, parsed.status === 'completed' ? 'captured' : 'approved', tx.id);
-        });
-      }
-      
-      res.json({
+      response.settlement = await settleCompletedRental({ ...tx, rental_task_id: taskId }, listing);
+      response.settlement_status = 'captured';
+      return res.json({ data: response });
+    } catch (settlementError) {
+      console.error('[Marketplace] Rental task completed but settlement failed:', settlementError.message);
+      return res.status(502).json({
         data: {
-          task_id: taskId,
-          status: parsed.status,
-          result: parsed.output ?? (parsed.artifacts && parsed.artifacts.length ? parsed.artifacts : null),
-          clarification_needed: parsed.status === 'input-required',
-          question: parsed.clarificationQuestion || null
-        }
-      });
-    } catch (e) {
-      console.error('[Marketplace] A2A task error:', e.message);
-      res.json({
-        data: {
-          task_id: taskId,
-          status: 'failed',
-          error: e.message,
-          message: 'Failed to communicate with the live agent. It may be offline.'
+          ...response,
+          settlement_status: 'failed',
+          settlement_error: settlementError.message,
+          retry_endpoint: `/api/marketplace/rent/${tx.id}/settle`
         }
       });
     }
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 });
 

@@ -65,6 +65,20 @@ function isCodeSnippet(text) {
   return codePatterns.some(pattern => pattern.test(trimmed));
 }
 
+// Accept both the simple demo payload and the A2A message.parts structure used
+// by the marketplace A2A client.
+function extractMessageText(params) {
+  const message = params?.message;
+  if (typeof message === 'string') return message;
+  if (Array.isArray(message?.parts)) {
+    const textPart = message.parts.find(part => typeof part?.text === 'string');
+    if (textPart) return textPart.text;
+  }
+  if (typeof message?.text === 'string') return message.text;
+  if (typeof params?.text === 'string') return params.text;
+  return '';
+}
+
 /**
  * Helper to perform mock code review
  * @param {string} code 
@@ -128,7 +142,7 @@ app.post('/a2a', (req, res) => {
 
   switch (method) {
     case 'message/send': {
-      const taskMessage = params?.message?.text || params?.message || params?.text || '';
+      const taskMessage = extractMessageText(params);
       const existingTaskId = params?.taskId || params?.task_id || params?.id;
 
       let task;

@@ -1,0 +1,11 @@
+{
+  "watch": ["src/"],
+  "ext": "js,json",
+  "ignore": [
+    "weft.db*",
+    "uploads/*",
+    "frontend/*",
+    "*.log",
+    ".git/*"
+  ]
+}

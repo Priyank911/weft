@@ -474,20 +474,34 @@ export default function SellerPortal({ user, token, sellerProfile, onAuthSuccess
                         <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                           📱 Scan QR to activate Seller iMessage Notifications
                         </div>
-                        <img 
-                          src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=sms%3A%2B12063268039%3Fbody%3DWeft%2520seller%2520account%2520activate" 
-                          alt="Seller Linq Activation QR Code"
-                          style={{ width: '120px', height: '120px', borderRadius: '8px', border: '2px solid var(--border-subtle)', margin: '0 auto 8px auto', display: 'block' }}
-                        />
-                        <a 
-                          href="sms:+12063268039?body=Weft%20seller%20account%20activate" 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="btn btn-secondary btn-sm"
-                          style={{ fontSize: '0.75rem', width: '100%', display: 'inline-flex', justifyContent: 'center', gap: '6px' }}
-                        >
-                          <Zap size={12} color="var(--accent-green)" /> Send "Weft seller account activate"
-                        </a>
+                        {(() => {
+                          const linqPhone = '+12063268039';
+                          const sId = sellerProfile?.id || user?.id || 'seller';
+                          const timeId = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+                          const smsBody = `Weft seller account activate ID:${sId} Session:${timeId}`;
+                          const smstoPayload = `SMSTO:${linqPhone}:${smsBody}`;
+                          const smsUri = `sms:${linqPhone}?body=${encodeURIComponent(smsBody)}`;
+                          const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(smstoPayload)}`;
+
+                          return (
+                            <>
+                              <img 
+                                src={qrCodeUrl} 
+                                alt="Seller Linq Activation QR Code"
+                                style={{ width: '130px', height: '130px', borderRadius: '8px', border: '2px solid var(--border-subtle)', margin: '0 auto 8px auto', display: 'block', background: '#ffffff', padding: '6px' }}
+                              />
+                              <a 
+                                href={smsUri} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="btn btn-secondary btn-sm"
+                                style={{ fontSize: '0.75rem', width: '100%', display: 'inline-flex', justifyContent: 'center', gap: '6px' }}
+                              >
+                                <Zap size={12} color="var(--accent-green)" /> Send Session Activation SMS
+                              </a>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       <div className="vcard-bottom">

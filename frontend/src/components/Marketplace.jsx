@@ -76,8 +76,11 @@ export default function Marketplace({ listings, onInstallFree, onPurchaseClick, 
       {/* Infinite Auto-Marquee Track (Scrollbar Hidden, Continuous Loop Left-to-Right) */}
       <div className="marquee-outer-container">
         {marqueeItems.length === 0 ? (
-          <div style={{ width: '100%', textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
-            No marketplace listings match your current search criteria.
+          <div style={{ width: '100%', textAlign: 'center', padding: '50px 20px', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', color: 'var(--text-primary)', marginBottom: '6px', fontWeight: 700 }}>No Active Primitives in Database</div>
+            <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', maxWidth: '480px', margin: '0 auto' }}>
+              The database is currently empty. Register or log into the <strong>Seller Portal</strong> to publish live agentic tools and skills!
+            </p>
           </div>
         ) : (
           <div className="marquee-inner-track">

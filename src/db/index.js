@@ -1,12 +1,16 @@
 import Database from 'better-sqlite3';
+import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Initialize database
-const DB_PATH = join(__dirname, '..', '..', 'weft.db');
+// Allow isolated test/demo databases without touching the default local data.
+const DB_PATH = process.env.WEFT_DB_PATH
+  ? resolve(process.env.WEFT_DB_PATH)
+  : join(__dirname, '..', '..', 'weft.db');
 const db = new Database(DB_PATH);
 
 // Enable WAL mode for better concurrent read performance
@@ -162,6 +166,16 @@ export const updateTransactionPrava = db.prepare(`
   WHERE id = ?
 `);
 
+export const updateTransactionMandate = db.prepare(`
+  UPDATE transactions SET prava_mandate_id = ?, prava_payment_url = ?, status = ?, updated_at = datetime('now')
+  WHERE id = ?
+`);
+
+export const activateTransactionMandate = db.prepare(`
+  UPDATE transactions SET prava_mandate_id = ?, status = 'approved', updated_at = datetime('now')
+  WHERE id = ?
+`);
+
 export const updateTransactionRental = db.prepare(`
   UPDATE transactions SET rental_task_id = ?, status = ?, updated_at = datetime('now')
   WHERE id = ?
@@ -186,6 +200,47 @@ export const createLedgerEntry = db.prepare(`
 export const getLedgerBySeller = db.prepare(`
   SELECT * FROM seller_ledger WHERE seller_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `);
+
+export const getLedgerCreditByTransaction = db.prepare(`
+  SELECT * FROM seller_ledger
+  WHERE transaction_id = ? AND type = 'credit'
+  LIMIT 1
+`);
+
+/**
+ * Marks a paid marketplace transaction as settled and credits its seller exactly
+ * once. Keeping the status transition and ledger mutation in one SQLite
+ * transaction prevents duplicate deliveries/retries from double-paying sellers.
+ */
+export function settleSellerCredit({ transactionId, sellerId, amountCents, description, status }) {
+  const settle = db.transaction(() => {
+    const existingCredit = getLedgerCreditByTransaction.get(transactionId);
+    const seller = getSellerById.get(sellerId);
+
+    if (!seller) {
+      throw new Error(`Seller not found for transaction ${transactionId}`);
+    }
+
+    if (!existingCredit) {
+      const newBalance = seller.payout_balance_cents + amountCents;
+      createLedgerEntry.run(
+        randomUUID(),
+        sellerId,
+        transactionId,
+        amountCents,
+        'credit',
+        newBalance,
+        description
+      );
+      updateSellerBalance.run(newBalance, sellerId);
+    }
+
+    updateTransactionStatus.run(status, transactionId);
+    return { seller, credited: !existingCredit };
+  });
+
+  return settle();
+}
 
 // --- FTS Triggers (manually sync) ---
 export function syncListingFTS(listing) {

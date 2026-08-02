@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import 'dotenv/config';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -106,9 +107,11 @@ server.tool('register_agent', 'Register a new buyer agent on the Weft Marketplac
   const profile = db.getAgentById.get(agentId);
 
   const linqNumber = process.env.LINQ_PHONE_NUMBER || '+12063268039';
-  const smsBody = 'Weft buyer account activate';
+  const timeId = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+  const smsBody = `Weft buyer account activate ID:${profile.id.slice(0, 8)} Session:${timeId}`;
+  const smstoPayload = `SMSTO:${linqNumber.replace(/[^0-9+]/g, '')}:${smsBody}`;
   const smsUri = `sms:${linqNumber.replace(/[^0-9+]/g, '')}?body=${encodeURIComponent(smsBody)}`;
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(smsUri)}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(smstoPayload)}`;
 
   return {
     agent_id: profile.id,

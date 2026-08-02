@@ -101,7 +101,10 @@ export default function DedicatedMarketplace({ listings, onInstallFree, onPurcha
       <div className="marketplace-items-grid">
         {filtered.length === 0 ? (
           <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
-            No agentic primitives match your current search criteria.
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', color: 'var(--text-primary)', marginBottom: '8px', fontWeight: 700 }}>No Primitives Found</div>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', maxWidth: '500px', margin: '0 auto' }}>
+              The database is currently empty. Use the Seller Portal to publish your first agentic skill or MCP tool!
+            </p>
           </div>
         ) : (
           filtered.map(item => {

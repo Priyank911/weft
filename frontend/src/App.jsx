@@ -124,7 +124,8 @@ export default function App() {
         txId: res.transaction_id,
         title,
         priceCents,
-        paymentUrl: res.payment_url
+        paymentUrl: res.payment_url,
+        isMock: res.is_mock === true
       });
     } catch (err) {
       showToast(`Purchase initiation error: ${err.message}`, 'info');
