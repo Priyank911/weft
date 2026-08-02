@@ -1,5 +1,5 @@
 // Unified API client for backend communication
-const API_BASE = 'http://localhost:3000';
+export const API_BASE = 'http://localhost:3000';
 
 export async function apiRequest(endpoint, method = 'GET', body = null, token = null) {
   const headers = { 'Content-Type': 'application/json' };
