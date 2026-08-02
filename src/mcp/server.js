@@ -74,18 +74,23 @@ function toolHandler(fn) {
 }
 
 // 1. register_agent
-server.tool('register_agent', 'Register a new agent on the Weft Marketplace', {
-  agent_type: z.enum(['claude_code', 'codex', 'antigravity', 'other']),
-  agent_name: z.string(),
-  user_email: z.string().email(),
-  capabilities: z.array(z.string()).optional()
-}, toolHandler(async ({ agent_type, agent_name, user_email, capabilities }) => {
+server.tool('register_agent', 'Register a new buyer agent on the Weft Marketplace. IMPORTANT: Before calling this tool, you MUST explicitly ask the user for ALL THREE of the following: (1) their full name, (2) their email address, and (3) their phone number. Do NOT assume or auto-fill any of these values. After registration completes, you MUST display the QR Code image and SMS activation link to the user in your output.', {
+  agent_type: z.enum(['claude_code', 'codex', 'antigravity', 'other']).describe('The type of AI agent being registered'),
+  user_name: z.string().describe('The full name of the human user registering the agent. You MUST ask the user for this.'),
+  user_email: z.string().email().describe('The email address of the human user. You MUST ask the user for this.'),
+  user_phone: z.string().describe('The phone number of the human user (e.g. +1234567890). You MUST ask the user for this.'),
+  capabilities: z.array(z.string()).optional().describe('Optional list of agent capabilities')
+}, toolHandler(async ({ agent_type, user_name, user_email, user_phone, capabilities }) => {
   let user = db.getUserByEmail.get(user_email);
   if (!user) {
     // Create user if not exists
     const userId = uuidv4();
-    db.createUser.run(userId, user_email, 'dummy_hash_' + Date.now(), 'buyer', null, null);
+    db.createUser.run(userId, user_email, 'dummy_hash_' + Date.now(), 'buyer', user_phone, null);
     user = db.getUserById.get(userId);
+  } else if (!user.phone) {
+    // Update existing user with phone if missing
+    db.updateUser.run(user.role, user_phone, user.prava_customer_id, user.id);
+    user = db.getUserById.get(user.id);
   }
 
   const agentId = uuidv4();
@@ -93,14 +98,29 @@ server.tool('register_agent', 'Register a new agent on the Weft Marketplace', {
     agentId,
     user.id,
     agent_type,
-    agent_name,
+    user_name,
     capabilities ? JSON.stringify(capabilities) : '[]',
     0,
     '{}'
   );
   const profile = db.getAgentById.get(agentId);
 
-  return { agent_id: profile.id, profile };
+  const linqNumber = process.env.LINQ_PHONE_NUMBER || '+12063268039';
+  const smsBody = 'Weft buyer account activate';
+  const smsUri = `sms:${linqNumber.replace(/[^0-9+]/g, '')}?body=${encodeURIComponent(smsBody)}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(smsUri)}`;
+
+  return {
+    agent_id: profile.id,
+    user_name,
+    user_email,
+    user_phone,
+    profile,
+    activation_qr_code_image_url: qrCodeUrl,
+    activation_sms_direct_link: smsUri,
+    activation_prefilled_text: smsBody,
+    message: `Account created for ${user_name}! MANDATORY INSTRUCTION FOR AGENT: You MUST show the human user the activation QR Code and SMS Link below so they can opt in to Linq iMessages:\n\n1. Display QR Code Image: ${qrCodeUrl}\n2. Display Direct SMS Link: ${smsUri}\n3. Instruct them to send "${smsBody}" to ${linqNumber}. They will receive "Weft account is successfully activated." from Weft.`
+  };
 }));
 
 // 2. search

@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { getAgentById, getListingById, getSellerById, searchListingsFTS, searchListingsByFilter, createTransaction, updateTransactionStatus, updateTransactionPrava, getTransactionById, createLedgerEntry, incrementDownloadCount, logAgentUsage } from '../db/index.js';
+import { getAgentById, getListingById, getSellerById, searchListingsFTS, searchListingsByFilter, createTransaction, updateTransactionStatus, updateTransactionPrava, getTransactionById, createLedgerEntry, incrementDownloadCount, logAgentUsage, getAssetsByListing } from '../db/index.js';
 import { createPaymentSession, getPaymentStatus, getMandateStatus } from '../services/prava.js';
 import { getDeliveryPayload } from '../services/asset-processor.js';
-import { sendPurchaseConfirmation, sendRentalNotification } from '../services/linq.js';
+import { sendPurchaseConfirmation, sendRentalNotification, sendPurchaseCheckout, sendAssetSold } from '../services/linq.js';
 import { createMandate } from '../services/prava.js';
 import { sendTask, getAgentCard, handleTaskResponse } from '../services/a2a-client.js';
 import { semanticSearch } from '../services/openai.js';
@@ -143,6 +143,11 @@ router.post('/purchase', async (req, res, next) => {
     const agent = getAgentById.get(agent_id);
     if (!agent) throw new AppError('NOT_FOUND', 404, 'Agent not found');
     
+    // Fetch the real user to get their actual email
+    const { getUserById } = await import('../db/index.js');
+    const user = getUserById.get(agent.user_id);
+    const realEmail = user ? user.email : 'buyer@weft.marketplace';
+    
     const listing = getListingById.get(listing_id);
     if (!listing) throw new AppError('NOT_FOUND', 404, 'Listing not found');
     if (listing.price_cents <= 0) throw new AppError('VALIDATION_ERROR', 400, 'This listing is free. Use /install instead.');
@@ -158,7 +163,7 @@ router.post('/purchase', async (req, res, next) => {
         merchantCountry: process.env.WEFT_MERCHANT_COUNTRY || 'US',
         products: [{ description: listing.title, unit_price: (listing.price_cents / 100).toFixed(2), quantity: 1 }],
         userId: agent.user_id,
-        userEmail: 'buyer@weft.marketplace'
+        userEmail: realEmail
       });
     } catch (e) {
       console.warn('[Marketplace] Prava session failed, creating mock:', e.message);
@@ -171,10 +176,20 @@ router.post('/purchase', async (req, res, next) => {
       txId, agent_id, listing_id,
       listing.price_cents, listing.currency || 'USD',
       'purchase', 'awaiting_approval',
-      session.session_id, session.payment_url,
+      session.session_id, session.payment_url || session.iframe_url,
       null, null
     );
     
+    // Send Linq notification to buyer
+    if (user && user.phone) {
+      await sendPurchaseCheckout(user.phone, {
+        assetName: listing.title,
+        amount: `$${(listing.price_cents / 100).toFixed(2)}`,
+        transactionId: txId,
+        paymentUrl: session.payment_url || session.iframe_url
+      });
+    }
+
     // Log usage
     const usageId = uuidv4();
     logAgentUsage.run(usageId, agent_id, 'purchase', listing_id, `Purchase ${listing.title}`, 'awaiting_approval');
@@ -182,7 +197,7 @@ router.post('/purchase', async (req, res, next) => {
     res.json({
       data: {
         transaction_id: txId,
-        payment_url: session.payment_url,
+        payment_url: session.payment_url || session.iframe_url,
         amount_cents: listing.price_cents,
         currency: listing.currency || 'USD',
         status: 'awaiting_approval',
@@ -202,15 +217,12 @@ router.get('/purchase/:txId/status', async (req, res, next) => {
     
     // Try checking Prava status
     let currentStatus = tx.status;
-    if (tx.prava_session_id && tx.status === 'awaiting_approval') {
+    if (tx.prava_session_id && tx.status === 'awaiting_approval' && !tx.prava_session_id.startsWith('mock_')) {
       try {
-        const pravaStatus = await getPaymentStatus(tx.prava_session_id);
-        if (pravaStatus.status === 'completed') {
+        const pravaResult = await getPaymentStatus(tx.prava_session_id);
+        if (pravaResult.payment_succeeded) {
           currentStatus = 'approved';
           updateTransactionStatus.run('approved', tx.id);
-        } else if (pravaStatus.status === 'failed') {
-          currentStatus = 'failed';
-          updateTransactionStatus.run('failed', tx.id);
         }
       } catch (e) {
         console.warn('[Marketplace] Prava status check failed:', e.message);
@@ -228,32 +240,88 @@ router.post('/purchase/:txId/deliver', async (req, res, next) => {
   try {
     const tx = getTransactionById.get(req.params.txId);
     if (!tx) throw new AppError('NOT_FOUND', 404, 'Transaction not found');
+    
+    // If not yet approved, verify with Prava first
+    if (tx.status === 'awaiting_approval' && tx.prava_session_id && !tx.prava_session_id.startsWith('mock_')) {
+      try {
+        const pravaResult = await getPaymentStatus(tx.prava_session_id);
+        console.log(`[Marketplace] Prava payment verification for session ${tx.prava_session_id}: succeeded=${pravaResult.payment_succeeded}, order_id=${pravaResult.order_id}, raw_status=${pravaResult.raw_status}`);
+        if (pravaResult.payment_succeeded) {
+          // Store the Prava order ID on the transaction for audit
+          if (pravaResult.order_id) {
+            updateTransactionPrava.run(tx.prava_session_id, tx.prava_payment_url, 'approved', tx.id);
+          } else {
+            updateTransactionStatus.run('approved', tx.id);
+          }
+          tx.status = 'approved';
+        } else {
+          throw new AppError('PAYMENT_REQUIRED', 402, `Payment not approved yet. Prava raw status: ${pravaResult.raw_status}. Current status: ${tx.status}`);
+        }
+      } catch (pravaErr) {
+        if (pravaErr.code === 'PAYMENT_REQUIRED') throw pravaErr;
+        console.warn('[Marketplace] Prava verification failed, checking local status:', pravaErr.message);
+      }
+    }
+    
     if (!['approved', 'captured'].includes(tx.status)) {
       throw new AppError('PAYMENT_REQUIRED', 402, `Payment not approved yet. Current status: ${tx.status}`);
     }
     
     // Prepare delivery
-    const deliveryPayload = await getDeliveryPayload(tx.listing_id);
+    const assets = getAssetsByListing.all(tx.listing_id);
+    const deliveryPayload = await getDeliveryPayload(tx.listing_id, assets);
     
-    // Update transaction
+    // Update transaction to delivered
     updateTransactionStatus.run('delivered', tx.id);
     
-    // Credit seller
+    // Credit seller — only after Prava verification passed
     const listing = getListingById.get(tx.listing_id);
+    const { getUserById } = await import('../db/index.js');
     if (listing) {
       const seller = getSellerById.get(listing.seller_id);
       if (seller) {
         const newBalance = seller.payout_balance_cents + tx.amount_cents;
         const ledgerId = uuidv4();
         createLedgerEntry.run(ledgerId, listing.seller_id, tx.id, tx.amount_cents, 'credit', newBalance, `Sale: ${listing.title}`);
-        // Update seller balance via direct SQL since we need to set specific value
+        // Update seller balance
         import('../db/index.js').then(db => {
           db.updateSellerBalance.run(newBalance, listing.seller_id);
         });
+
+        // Notify Seller via Linq
+        const sellerUser = getUserById.get(seller.user_id);
+        if (sellerUser && sellerUser.phone) {
+          try {
+            await sendAssetSold(sellerUser.phone, {
+              assetName: listing.title,
+              amount: `$${(tx.amount_cents / 100).toFixed(2)}`,
+              transactionId: tx.id
+            });
+          } catch (e) {
+            console.warn('[Marketplace] Linq seller notification failed:', e.message);
+          }
+        }
       }
       incrementDownloadCount.run(tx.listing_id);
     }
     
+    // Notify Buyer via Linq
+    const agent = getAgentById.get(tx.buyer_agent_id);
+    if (agent) {
+      const buyerUser = getUserById.get(agent.user_id);
+      if (buyerUser && buyerUser.phone) {
+        try {
+          await sendPurchaseConfirmation(buyerUser.phone, {
+            assetName: listing ? listing.title : 'Asset',
+            amount: `$${(tx.amount_cents / 100).toFixed(2)}`,
+            transactionId: tx.id
+          });
+        } catch (e) {
+          console.warn('[Marketplace] Linq buyer notification failed:', e.message);
+        }
+      }
+    }
+
     // Log usage
     const usageId = uuidv4();
     logAgentUsage.run(usageId, tx.buyer_agent_id, 'download', tx.listing_id, 'Delivered', 'success');

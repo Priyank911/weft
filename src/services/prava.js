@@ -77,7 +77,34 @@ export async function getPaymentStatus(sessionId) {
     }
 
     const data = await response.json();
-    return data.status; // assuming the payload contains status field
+    // Prava returns session-level status AND line-item statuses
+    // We check line items for 'credentials_generated' which means payment succeeded
+    let paymentSucceeded = false;
+    if (data.transactions && data.transactions.length > 0) {
+      for (const txn of data.transactions) {
+        if (txn.line_items && txn.line_items.length > 0) {
+          for (const item of txn.line_items) {
+            if (item.status === 'credentials_generated' || item.status === 'approved' || item.status === 'captured') {
+              paymentSucceeded = true;
+            }
+          }
+        }
+        if (txn.status === 'approved' || txn.status === 'captured' || txn.status === 'completed') {
+          paymentSucceeded = true;
+        }
+      }
+    }
+    // Also check top-level status
+    if (data.status === 'approved' || data.status === 'captured' || data.status === 'completed') {
+      paymentSucceeded = true;
+    }
+
+    return {
+      raw_status: data.status,
+      order_id: data.order_id || null,
+      payment_succeeded: paymentSucceeded,
+      data
+    };
   } catch (error) {
     console.error('[PravaService] Error in getPaymentStatus:', error);
     throw { error: { code: 'PRAVA_STATUS_ERROR', message: error.message } };
