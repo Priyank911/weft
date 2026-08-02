@@ -9,7 +9,7 @@ import { generateListingMetadata } from '../services/openai.js';
 import { publishAgentFacts } from '../services/nanda.js';
 
 const router = Router();
-const upload = multer({ dest: './uploads/temp' });
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Create a new listing (draft)
 router.post('/', authenticate, requireRole('seller', 'both'), async (req, res, next) => {
