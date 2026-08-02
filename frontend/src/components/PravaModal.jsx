@@ -48,9 +48,13 @@ export default function PravaModal({ info, onClose, showToast }) {
           </p>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>Click below to simulate approval with your Prava Sandbox Card (<code>4622943123232184</code>):</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <a href={info.paymentUrl} target="_blank" rel="noreferrer" className="btn btn-primary btn-block">
-              Open Prava Session Checkout <ExternalLink size={16} />
-            </a>
+            <iframe 
+              src={info.paymentUrl} 
+              style={{ width: '100%', height: '400px', border: 'none', borderRadius: '8px', background: '#f5f5f5' }} 
+              allow="payment *; publickey-credentials-get *; publickey-credentials-create *"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation"
+              title="Prava Checkout"
+            />
             <button onClick={handleSimulateApprove} className="btn btn-secondary btn-block">
               Simulate Instant Payment Approval
             </button>

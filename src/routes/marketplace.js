@@ -143,6 +143,11 @@ router.post('/purchase', async (req, res, next) => {
     const agent = getAgentById.get(agent_id);
     if (!agent) throw new AppError('NOT_FOUND', 404, 'Agent not found');
     
+    // Fetch the real user to get their actual email
+    const { getUserById } = await import('../db/index.js');
+    const user = getUserById.get(agent.user_id);
+    const realEmail = user ? user.email : 'buyer@weft.marketplace';
+    
     const listing = getListingById.get(listing_id);
     if (!listing) throw new AppError('NOT_FOUND', 404, 'Listing not found');
     if (listing.price_cents <= 0) throw new AppError('VALIDATION_ERROR', 400, 'This listing is free. Use /install instead.');
@@ -158,7 +163,7 @@ router.post('/purchase', async (req, res, next) => {
         merchantCountry: process.env.WEFT_MERCHANT_COUNTRY || 'US',
         products: [{ description: listing.title, unit_price: (listing.price_cents / 100).toFixed(2), quantity: 1 }],
         userId: agent.user_id,
-        userEmail: 'buyer@weft.marketplace'
+        userEmail: realEmail
       });
     } catch (e) {
       console.warn('[Marketplace] Prava session failed, creating mock:', e.message);
@@ -171,7 +176,7 @@ router.post('/purchase', async (req, res, next) => {
       txId, agent_id, listing_id,
       listing.price_cents, listing.currency || 'USD',
       'purchase', 'awaiting_approval',
-      session.session_id, session.payment_url,
+      session.session_id, session.payment_url || session.iframe_url,
       null, null
     );
     
@@ -182,7 +187,7 @@ router.post('/purchase', async (req, res, next) => {
     res.json({
       data: {
         transaction_id: txId,
-        payment_url: session.payment_url,
+        payment_url: session.payment_url || session.iframe_url,
         amount_cents: listing.price_cents,
         currency: listing.currency || 'USD',
         status: 'awaiting_approval',
