@@ -70,8 +70,8 @@ export const updateSellerBalance = db.prepare(`
 
 // --- Listings ---
 export const createListing = db.prepare(`
-  INSERT INTO listings (id, seller_id, title, description, long_description, category, listing_type, price_cents, currency, rate_type, rate_limit, status, a2a_endpoint_url, capabilities, tags, sample_description)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO listings (id, seller_id, title, description, long_description, category, listing_type, price_cents, currency, rate_type, rate_limit, status, a2a_endpoint_url, capabilities, tags, sample_description, download_count)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 export const getListingById = db.prepare(`SELECT * FROM listings WHERE id = ?`);

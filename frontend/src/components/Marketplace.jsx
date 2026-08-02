@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Search, X, CheckCircle, CreditCard, Zap } from 'lucide-react';
+import { Search, X, CreditCard, Zap, Cpu, Download, ArrowRight, Flame } from 'lucide-react';
 
-export default function Marketplace({ listings, onInstallFree, onPurchaseClick }) {
+export default function Marketplace({ listings, onInstallFree, onPurchaseClick, onGoToMarketplace }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('all');
 
@@ -24,95 +24,124 @@ export default function Marketplace({ listings, onInstallFree, onPurchaseClick }
     );
   }
 
+  // Sort DB items by live execution volume / download_count DESC for true DB leaderboard
+  const sortedListings = [...filtered].sort((a, b) => (b.download_count || 0) - (a.download_count || 0));
+  const baseItems = sortedListings.slice(0, 8);
+  // Duplicate list to achieve 100% seamless infinite marquee animation loop
+  const marqueeItems = baseItems.length > 0 ? [...baseItems, ...baseItems] : [];
+
   return (
-    <section id="marketplace" className="section-container">
-      <div className="section-header">
-        <div className="header-tag">DISCOVER & DEPLOY</div>
-        <h2 className="section-title">Verified Agent Tools & Services</h2>
-        <p className="section-desc">Search listing metadata synced across local SQLite and the NANDA global index.</p>
+    <section id="marketplace" className="section-container" style={{ paddingBottom: '40px' }}>
+      <div className="section-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px' }}>
+        <div className="header-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+          <Flame size={13} className="accent-text-brand" /> LIVE DB TRENDING & LEADERBOARD
+        </div>
+        <h2 className="section-title">Most Requested Agentic Primitives</h2>
+        <p className="section-desc">Top active tools and playbooks ranked by execution calls, NANDA index queries, and Prava settlement volume.</p>
       </div>
 
-      <div className="marketplace-controls">
-        <div className="search-box">
+      <div className="marketplace-filters" style={{ marginBottom: '20px' }}>
+        <div className="search-input-wrapper">
           <Search className="search-icon" size={18} />
           <input 
             type="text" 
-            placeholder="Search by title, capability, or keyword (e.g. 'code review', 'security', 'python')..."
+            className="search-input"
+            placeholder="Search trending primitives (e.g. 'security', 'k8s', 'sql')..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
-            <button className="search-clear" onClick={() => setSearchQuery('')}>
+            <button 
+              onClick={() => setSearchQuery('')}
+              style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+            >
               <X size={16} />
             </button>
           )}
         </div>
 
-        <div className="filter-tabs">
+        <div className="filter-pills">
           {['all', 'static', 'live', 'free'].map(f => (
             <button 
               key={f}
-              className={`filter-btn ${filter === f ? 'active' : ''}`}
+              className={`filter-pill ${filter === f ? 'active' : ''}`}
               onClick={() => setFilter(f)}
             >
-              {f === 'all' ? 'All Items' : f === 'static' ? 'Static Assets' : f === 'live' ? 'Live A2A Agents' : 'Free Only'}
+              {f === 'all' ? 'All Trending' : f === 'static' ? 'Static Assets' : f === 'live' ? 'Live A2A' : 'Free Only'}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="listings-grid">
-        {filtered.length === 0 ? (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-            No marketplace listings match your filter.
+      {/* Infinite Auto-Marquee Track (Scrollbar Hidden, Continuous Loop Left-to-Right) */}
+      <div className="marquee-outer-container">
+        {marqueeItems.length === 0 ? (
+          <div style={{ width: '100%', textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
+            No marketplace listings match your current search criteria.
           </div>
         ) : (
-          filtered.map(item => {
-            const isFree = item.price_cents === 0;
-            const priceDisplay = isFree ? 'FREE' : `$${(item.price_cents / 100).toFixed(2)}`;
-            const isLive = item.listing_type === 'live';
+          <div className="marquee-inner-track">
+            {marqueeItems.map((item, index) => {
+              const isFree = item.price_cents === 0;
+              const priceDisplay = isFree ? 'FREE' : `$${(item.price_cents / 100).toFixed(2)}`;
 
-            let tagsArr = [];
-            try {
-              tagsArr = typeof item.tags === 'string' ? JSON.parse(item.tags) : (item.tags || []);
-            } catch { tagsArr = ['tool']; }
+              return (
+                <div 
+                  key={`${item.id}-${index}`} 
+                  className="compact-trending-card"
+                  onClick={onGoToMarketplace}
+                  style={{
+                    minWidth: '310px',
+                    maxWidth: '330px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '18px',
+                    flexShrink: 0,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    transition: 'var(--transition-fast)'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span className="card-category-tag">{item.category || 'MCP Tool'}</span>
+                      <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.92rem' }}>{priceDisplay}</span>
+                    </div>
 
-            return (
-              <div key={item.id} className="listing-card">
-                <div>
-                  <div className="card-top">
-                    <span className={`card-type-badge ${isLive ? 'live' : 'static'}`}>
-                      {isLive ? 'Live A2A Agent' : 'Static Asset'}
+                    <h4 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {item.title}
+                    </h4>
+
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.4, marginBottom: '14px' }}>
+                      {item.description}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.76rem', fontFamily: 'var(--font-mono)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {(item.download_count || 0).toLocaleString()} executions
                     </span>
-                    <span className={`card-price ${isFree ? 'free' : ''}`}>{priceDisplay}</span>
-                  </div>
-
-                  <h3 className="card-title">{item.title}</h3>
-                  <p className="card-desc">{item.description || 'No description provided.'}</p>
-
-                  <div className="card-tags">
-                    {tagsArr.map((t, idx) => (
-                      <span key={idx} className="tag-pill">#{t}</span>
-                    ))}
+                    <span style={{ color: 'var(--accent-brand)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                      Deploy <ArrowRight size={12} />
+                    </span>
                   </div>
                 </div>
-
-                <div className="card-actions">
-                  {isFree ? (
-                    <button className="btn btn-secondary btn-block" onClick={() => onInstallFree(item.id)}>
-                      <Zap size={16} /> Install Asset (Free)
-                    </button>
-                  ) : (
-                    <button className="btn btn-primary btn-block" onClick={() => onPurchaseClick(item.id, item.title, item.price_cents)}>
-                      <CreditCard size={16} /> Buy via Prava ({priceDisplay})
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </div>
+
+      {onGoToMarketplace && (
+        <div style={{ textAlign: 'center', marginTop: '16px' }}>
+          <button className="btn btn-secondary btn-sm" onClick={onGoToMarketplace}>
+            Browse All {listings.length} Agentic Primitives in Dedicated Marketplace <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
     </section>
   );
 }

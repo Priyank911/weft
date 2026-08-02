@@ -1,56 +1,54 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { ArrowRight, Copy, Check } from 'lucide-react';
 
-export default function Hero({ totalListings }) {
+export default function Hero() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText('npx weft-mcp setup');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <section id="home" className="hero-section">
-      <div className="hero-bg-art">
-        <pre className="ascii-grid">
-..:-==++xX#8888@@@@@@@@@@@@88#Xx++==--:..
-.:--=+xX#8@88#XXxx++++==++xxXX#88@8#Xx+=-:..
-..:=+X#88#Xx+=--::......::--=+xX#88#X+=:..
-.::+X#8#x=-.                  .-=x#8#X+::.
-.:=X#8#x:                        :x#8#X=:.
-.=#88#+                            +#88#=.
-        </pre>
+      {/* Ambient Full-Screen Background Agent GIF */}
+      <div className="hero-gif-overlay">
+        <img src="/hero.gif" alt="Agent AI Background Motion" className="hero-gif-img" />
       </div>
 
       <div className="hero-content">
-        <div className="hero-badge">
-          <span className="status-indicator"></span> Decentralized Agent-to-Agent Economy
+        <div className="hero-badge-pill">
+          <span className="live-dot"></span>
+          <span>New · Agentic Marketplace Protocol</span>
+          <ArrowRight size={12} style={{ marginLeft: '4px', opacity: 0.8 }} />
         </div>
+
         <h1 className="hero-headline">
-          The Agentic Marketplace that <em className="accent-text">really</em> trades.
+          The open marketplace for <span className="accent-text-brand">AI agents.</span>
         </h1>
+
         <p className="hero-subtext">
-          Discover, buy, and rent verified AI tools, static code skills, and live A2A agents.
-          Connected directly via MCP, indexed on NANDA, and settled seamlessly with Prava.
+          Weft gives your agents state-of-the-art skills, live A2A microservices, and instant Prava billing, all built in. Connected via MCP. Works with any model.
         </p>
 
-        <div className="hero-cta-group">
-          <a href="#marketplace" className="btn btn-primary btn-lg">Explore Marketplace &rarr;</a>
-          <a href="#seller-portal" className="btn btn-secondary btn-lg">List Your Agent / Tool</a>
+        {/* Supermemory-Style Terminal Setup Bar */}
+        <div className="hero-code-snippet">
+          <span className="code-prefix">$</span>
+          <code className="code-text">npx weft-mcp setup</code>
+          <button className="code-copy-btn" onClick={handleCopy} title="Copy setup command">
+            {copied ? <Check size={14} color="var(--accent-green)" /> : <Copy size={14} />}
+          </button>
         </div>
 
-        {/* Quick Stats Bar */}
-        <div className="stats-ribbon">
-          <div className="stat-item">
-            <span className="stat-val">{totalListings}</span>
-            <span className="stat-lbl">Active Assets</span>
-          </div>
-          <div className="stat-divider"></div>
-          <div className="stat-item">
-            <span className="stat-val">100%</span>
-            <span className="stat-lbl">MCP Compliant</span>
-          </div>
-          <div className="stat-divider"></div>
-          <div className="stat-item">
-            <span className="stat-val">Instant</span>
-            <span className="stat-lbl">Prava Settlement</span>
-          </div>
-          <div className="stat-divider"></div>
-          <div className="stat-item">
-            <span className="stat-val">NANDA</span>
-            <span className="stat-lbl">Fact Discovery</span>
+        {/* Supermemory-Style Clean Inline Partners Bar */}
+        <div className="hero-partners-bar">
+          <div className="partners-label">POWERED BY THE BEST PROTOCOLS</div>
+          <div className="partners-logos">
+            <span className="partner-logo-item">PRAVA</span>
+            <span className="partner-logo-item">NANDA INDEX</span>
+            <span className="partner-logo-item">LINQ</span>
+            <span className="partner-logo-item">OPENAI FTS</span>
           </div>
         </div>
       </div>

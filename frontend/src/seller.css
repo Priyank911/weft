@@ -1,0 +1,426 @@
+/* ============================================================
+   WEFT DEDICATED SELLER DASHBOARD STYLESHEET (seller.css)
+   Inspired by ZynkBank Fintech Layout (Pure Black & Logo Red Theme)
+   ============================================================ */
+
+.seller-dashboard-wrapper {
+  height: 100vh;
+  max-height: 100vh;
+  padding: 16px 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Outer ZynkBank Style Card Container */
+.seller-app-frame {
+  height: calc(100vh - 32px);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Top Header Bar */
+.seller-top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.seller-brand-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.seller-brand-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.seller-brand-name {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.seller-route-badge {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--accent-brand);
+  background: rgba(255, 77, 77, 0.1);
+  border: 1px solid rgba(255, 77, 77, 0.3);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seller-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.seller-logout-btn {
+  background: rgba(255, 77, 77, 0.1);
+  color: var(--accent-brand);
+  border: 1px solid rgba(255, 77, 77, 0.3);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition-fast);
+}
+
+.seller-logout-btn:hover {
+  background: rgba(255, 77, 77, 0.22);
+}
+
+/* 2-Column Dashboard Layout (Left Nav + Main Content) */
+.seller-grid-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 24px;
+  overflow: hidden;
+}
+
+/* Left Sidebar Profile & Navigation */
+.seller-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+.seller-profile-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.seller-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-brand) 0%, #ff7777 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(255, 77, 77, 0.4);
+}
+
+.seller-user-name {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.seller-user-email {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+/* Sidebar Menu Tabs */
+.seller-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.seller-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: var(--transition-fast);
+}
+
+.seller-menu-item:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.seller-menu-item.active {
+  color: var(--text-primary);
+  background: linear-gradient(90deg, rgba(255, 77, 77, 0.16) 0%, rgba(255, 77, 77, 0.04) 100%);
+  border: 1px solid rgba(255, 77, 77, 0.3);
+  font-weight: 600;
+  box-shadow: 0 4px 18px rgba(255, 77, 77, 0.15);
+}
+
+.seller-menu-item.active .menu-icon {
+  color: var(--accent-brand);
+}
+
+/* Main Dashboard Area */
+.seller-main-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.seller-welcome-title {
+  font-family: var(--font-heading);
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.seller-sub-greeting {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Balance & Sales Pill Cards Row */
+.financial-pills-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.fin-pill-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.fin-pill-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.fin-pill-lbl {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fin-pill-val {
+  font-family: var(--font-heading);
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* Virtual Prava Cards Row */
+.prava-cards-title-row {
+  font-family: var(--font-heading);
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.prava-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+/* Virtual Card Styling */
+.virtual-prava-card {
+  height: 115px;
+  border-radius: 16px;
+  padding: 14px 16px;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  transition: var(--transition-fast);
+}
+
+.virtual-prava-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+}
+
+.virtual-prava-card.red-glow {
+  background: linear-gradient(135deg, rgba(255, 77, 77, 0.14) 0%, rgba(14, 14, 20, 0.95) 100%);
+  border: 1px solid rgba(255, 77, 77, 0.35);
+  box-shadow: 0 8px 30px rgba(255, 77, 77, 0.15);
+}
+
+.virtual-prava-card.cyan-glow {
+  background: linear-gradient(135deg, rgba(0, 102, 255, 0.14) 0%, rgba(14, 14, 20, 0.95) 100%);
+  border: 1px solid rgba(0, 102, 255, 0.35);
+  box-shadow: 0 8px 30px rgba(0, 102, 255, 0.15);
+}
+
+.virtual-prava-card.emerald-glow {
+  background: linear-gradient(135deg, rgba(0, 230, 118, 0.14) 0%, rgba(14, 14, 20, 0.95) 100%);
+  border: 1px solid rgba(0, 230, 118, 0.35);
+  box-shadow: 0 8px 30px rgba(0, 230, 118, 0.15);
+}
+
+.vcard-status-pill {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(255, 77, 77, 0.15);
+  color: var(--accent-brand);
+  border: 1px solid rgba(255, 77, 77, 0.3);
+}
+
+.vcard-status-pill.cyan {
+  background: rgba(0, 102, 255, 0.15);
+  color: var(--accent-cyan);
+  border-color: rgba(0, 102, 255, 0.3);
+}
+
+.vcard-status-pill.green {
+  background: rgba(0, 230, 118, 0.15);
+  color: var(--accent-green);
+  border-color: rgba(0, 230, 118, 0.3);
+}
+
+.vcard-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vcard-bank-name {
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.vcard-number {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+}
+
+.vcard-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  opacity: 0.9;
+}
+
+/* My Published Assets & Transactions Table */
+.dashboard-table-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+}
+
+.table-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.table-card-title {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dashboard-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.84rem;
+}
+
+.dashboard-data-table th {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dashboard-data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.dashboard-data-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 1024px) {
+  .seller-dashboard-wrapper {
+    height: auto;
+    max-height: none;
+    overflow: auto;
+  }
+  .seller-app-frame {
+    height: auto;
+  }
+  .seller-grid-layout {
+    grid-template-columns: 1fr;
+  }
+  .prava-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}

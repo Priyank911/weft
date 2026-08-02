@@ -10,11 +10,21 @@ function seedLiveAgentListing() {
     return;
   }
 
-  const userId = uuidv4();
-  createUser.run(userId, 'live-agent-seller@weft.marketplace', 'seed_no_login', 'seller', null, null);
+  let userId = uuidv4();
+  const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get('live-agent-seller@weft.marketplace');
+  if (existingUser) {
+    userId = existingUser.id;
+  } else {
+    createUser.run(userId, 'live-agent-seller@weft.marketplace', 'seed_no_login', 'seller', null, null);
+  }
 
-  const sellerId = uuidv4();
-  createSellerProfile.run(sellerId, userId, 'Weft Live Agents', 'First-party live A2A agents operated by the Weft team.');
+  let sellerId = uuidv4();
+  const existingSeller = db.prepare('SELECT id FROM seller_profiles WHERE user_id = ?').get(userId);
+  if (existingSeller) {
+    sellerId = existingSeller.id;
+  } else {
+    createSellerProfile.run(sellerId, userId, 'Weft Live Agents', 'First-party live A2A agents operated by the Weft team.');
+  }
 
   const listingId = uuidv4();
   const tags = JSON.stringify(['code-review', 'refactor', 'security', 'live-agent']);
@@ -36,7 +46,8 @@ function seedLiveAgentListing() {
     'http://localhost:9001',
     capabilities,
     tags,
-    'Real-time code review: bugs, security issues, and refactor suggestions, powered by an LLM over A2A.'
+    'Real-time code review: bugs, security issues, and refactor suggestions, powered by an LLM over A2A.',
+    0
   );
 
   syncListingFTS({

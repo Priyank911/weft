@@ -1,34 +1,96 @@
 import React from 'react';
+import { Terminal, CreditCard, CheckCircle2, Shield } from 'lucide-react';
 
 export default function ProtocolSpec() {
   return (
-    <section id="how-it-works" className="section-container dark-bg">
-      <div className="section-header">
-        <div className="header-tag">THE ARCHITECTURE</div>
-        <h2 className="section-title">How Weft Connects Agents & Payments</h2>
-        <p className="section-desc">An open-source stack bringing agent discovery, billing, and communication together.</p>
+    <section id="how-it-works" className="protocol-spec-section">
+      {/* Top Section Header Bar */}
+      <div className="section-index-bar">
+        <div className="index-left">
+          <span className="index-arrow">›</span> HOW IT WORKS
+        </div>
       </div>
 
-      <div className="architecture-grid">
-        <div className="arch-card">
-          <div className="arch-icon">⚡</div>
-          <h3>1. Agent Registration via MCP</h3>
-          <p>Buyer agents (Claude Code, Codex, Antigravity) register via standard MCP stdio protocol using <code>register_agent</code>. Returns a unique tracking <code>agent_id</code>.</p>
-        </div>
-        <div className="arch-card">
-          <div className="arch-icon">🔍</div>
-          <h3>2. ID-Based Query & NANDA Index</h3>
-          <p>Agents execute <code>search</code> queries. Weft validates <code>agent_id</code>, queries NANDA Fact Index & local FTS, and returns <strong>metadata-only</strong> listings with installation guidance.</p>
-        </div>
-        <div className="arch-card">
-          <div className="arch-icon">💳</div>
-          <h3>3. Prava Payments & Mandates</h3>
-          <p>For premium items, Weft creates a <strong>Prava Payment Session</strong> or <strong>Rental Mandate</strong>. Humans approve via Prava Sandbox checkout, triggering instant delivery.</p>
-        </div>
-        <div className="arch-card">
-          <div className="arch-icon">📱</div>
-          <h3>4. Linq iMessage Receipts</h3>
-          <p>Upon approval, Linq API dispatches SMS/iMessage notifications and digital receipts directly to the buyer's phone line.</p>
+      <div className="protocol-spec-container">
+        <div className="protocol-grid">
+          {/* Left Column: Headline & Overview */}
+          <div className="protocol-intro-col">
+            <div className="header-tag">THE ARCHITECTURE</div>
+            <h2 className="protocol-main-title">
+              We built an architecture that <span className="accent-text-brand">empowers agents.</span>
+            </h2>
+            <p className="protocol-desc">
+              Weft integrates machine context, decentralized discovery, card payments, and SMS receipts into a seamless open protocol.
+            </p>
+
+            <div className="protocol-features-list">
+              <div className="feature-row">
+                <CheckCircle2 size={16} className="feature-icon" />
+                <span>Standard MCP Stdio transport for all AI models</span>
+              </div>
+              <div className="feature-row">
+                <CheckCircle2 size={16} className="feature-icon" />
+                <span>NANDA Fact Index & SQLite FTS5 instant discovery</span>
+              </div>
+              <div className="feature-row">
+                <CheckCircle2 size={16} className="feature-icon" />
+                <span>Prava payment sessions & automated A2A mandates</span>
+              </div>
+              <div className="feature-row">
+                <CheckCircle2 size={16} className="feature-icon" />
+                <span>Linq SMS & iMessage receipts delivered to humans</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Precision Blueprint Cards with Corner Handles */}
+          <div className="protocol-cards-col">
+            {/* Card 1: Discovery & MCP */}
+            <div className="blueprint-card">
+              <span className="corner-handle top-left"></span>
+              <span className="corner-handle top-right"></span>
+              <span className="corner-handle bottom-left"></span>
+              <span className="corner-handle bottom-right"></span>
+
+              <div className="blueprint-header">
+                <Terminal size={18} className="blueprint-icon" />
+                <span className="blueprint-tag">01 / DISCOVERY & MCP</span>
+              </div>
+
+              <h3 className="blueprint-title">
+                MCP REGISTRATION & NANDA FACT INDEX.
+              </h3>
+
+              <p className="blueprint-text">
+                Buyer agents (Claude Code, Codex, Antigravity) register via standard MCP stdio transport using <code>register_agent</code>. Queries return metadata-only listings synced across local FTS5 and the global NANDA Fact Index.
+              </p>
+            </div>
+
+            {/* Card 2: Payments & Settlement */}
+            <div className="blueprint-card">
+              <span className="corner-handle top-left"></span>
+              <span className="corner-handle top-right"></span>
+              <span className="corner-handle bottom-left"></span>
+              <span className="corner-handle bottom-right"></span>
+
+              <div className="blueprint-header">
+                <CreditCard size={18} className="blueprint-icon" />
+                <span className="blueprint-tag">02 / SETTLEMENT & RECEIPTS</span>
+              </div>
+
+              <h3 className="blueprint-title">
+                PRAVA MANDATES & LINQ RECEIPT DISPATCH.
+              </h3>
+
+              <p className="blueprint-text">
+                For premium items and live A2A microservices, Weft creates Prava payment sessions or automated rental mandates. Upon human approval, Linq API dispatches instant SMS/iMessage receipts directly to the buyer line.
+              </p>
+
+              <div className="blueprint-badge-inline">
+                <Shield size={12} /> &lt;300ms Prava Settlement
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>

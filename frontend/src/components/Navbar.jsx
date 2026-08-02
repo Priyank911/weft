@@ -1,47 +1,65 @@
 import React from 'react';
+import { User, Bot, Store, Sparkles, Grid, BookOpen } from 'lucide-react';
 
-export default function Navbar({ mode, setMode, user, onLogout }) {
+export default function Navbar({ mode, setMode, view, setView }) {
   return (
     <header className="site-header">
       <div className="header-container">
-        <a href="#home" className="site-brand">
-          <img src="/logo.jpg" alt="Weft Logo" className="brand-logo-img" />
-          <span className="brand-title">WEFT<span className="brand-dot">.</span></span>
+        <a
+          onClick={() => setView('landing')}
+          className="site-brand"
+        >
+          <img src="/logo.png" alt="Weft Logo" className="brand-logo-img" />
+          <span className="brand-title">
+            WEFT<span className="brand-dot">.</span>
+          </span>
           <span className="brand-tag">AGENTIC MARKETPLACE</span>
         </a>
 
         <nav className="desktop-nav">
-          <a href="#home" className="nav-link active">Home</a>
-          <a href="#marketplace" className="nav-link">Marketplace</a>
-          <a href="#how-it-works" className="nav-link">Protocol Spec</a>
-          <a href="#seller-portal" className="nav-link">Seller Portal</a>
-          <a href="#ecosystem" className="nav-link">Ecosystem</a>
+          <button
+            className={`nav-link ${view === 'landing' ? 'active' : ''}`}
+            onClick={() => setView('landing')}
+          >
+            <Sparkles size={15} /> Home
+          </button>
+          <button
+            className={`nav-link ${view === 'marketplace' ? 'active' : ''}`}
+            onClick={() => setView('marketplace')}
+          >
+            <Grid size={15} /> Marketplace
+          </button>
+          <button
+            className={`nav-link ${view === 'docs' ? 'active' : ''}`}
+            onClick={() => setView('docs')}
+          >
+            <BookOpen size={15} /> Protocol Spec & Docs
+          </button>
+          <button
+            className={`nav-link ${view === 'seller' ? 'active' : ''}`}
+            onClick={() => setView('seller')}
+          >
+            <Store size={15} /> Seller Portal
+          </button>
         </nav>
 
         <div className="header-actions">
           <div className="mode-toggle-pill">
-            <button 
+            <button
               className={`mode-btn ${mode === 'human' ? 'active' : ''}`}
               onClick={() => setMode('human')}
               title="Switch to Human Portal"
             >
-              <span>👤</span> I'm a Human
+              <User size={14} /> I'm a Human
             </button>
-            <button 
+            <button
               className={`mode-btn ${mode === 'agent' ? 'active' : ''}`}
               onClick={() => setMode('agent')}
               title="Switch to Agent MCP Terminal"
             >
-              <span>🤖</span> I'm an Agent
+              <Bot size={14} /> I'm an Agent
             </button>
           </div>
-
-          {user && (
-            <div className="user-badge" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
-              <span className="user-email" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{user.email}</span>
-              <button onClick={onLogout} className="btn-sm btn-ghost">Logout</button>
-            </div>
-          )}
         </div>
       </div>
     </header>

@@ -25,7 +25,8 @@ router.post('/', authenticate, requireRole('seller', 'both'), async (req, res, n
       rate_type || 'one_time', rate_limit || null, 'draft',
       a2a_endpoint_url || null,
       JSON.stringify(capabilities || []), JSON.stringify(tags || []),
-      sample_description || ''
+      sample_description || '',
+      0
     );
     
     const listing = getListingById.get(id);

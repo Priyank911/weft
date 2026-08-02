@@ -2,15 +2,19 @@ import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Marketplace from './components/Marketplace';
+import DedicatedMarketplace from './components/DedicatedMarketplace';
+import DocumentationView from './components/DocumentationView';
 import ProtocolSpec from './components/ProtocolSpec';
 import SellerPortal from './components/SellerPortal';
 import AgentTerminal from './components/AgentTerminal';
 import PravaModal from './components/PravaModal';
 import Footer from './components/Footer';
 import { apiRequest } from './api';
+import { ArrowRight } from 'lucide-react';
 
 export default function App() {
   const [mode, setMode] = useState('human'); // 'human' or 'agent'
+  const [view, setView] = useState('landing'); // 'landing', 'marketplace', 'docs', or 'seller'
   const [token, setToken] = useState(localStorage.getItem('weft_token') || null);
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('weft_user') || 'null'));
   const [sellerProfile, setSellerProfile] = useState(JSON.parse(localStorage.getItem('weft_seller') || 'null'));
@@ -41,6 +45,20 @@ export default function App() {
     fetchListings();
   }, []);
 
+  const setViewWithUrl = (newView) => {
+    setView(newView);
+    if (newView === 'seller' && user) {
+      const sId = sellerProfile ? sellerProfile.id : user.id;
+      window.history.pushState({}, '', `/seller-portal?id=${sId}`);
+    } else if (newView === 'docs') {
+      window.history.pushState({}, '', '/docs');
+    } else if (newView === 'marketplace') {
+      window.history.pushState({}, '', '/marketplace');
+    } else {
+      window.history.pushState({}, '', '/');
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('weft_token');
     localStorage.removeItem('weft_user');
@@ -48,6 +66,7 @@ export default function App() {
     setToken(null);
     setUser(null);
     setSellerProfile(null);
+    setViewWithUrl('landing');
     showToast('Logged out successfully', 'info');
   };
 
@@ -60,6 +79,7 @@ export default function App() {
       setSellerProfile(newSellerProfile);
       localStorage.setItem('weft_seller', JSON.stringify(newSellerProfile));
     }
+    setViewWithUrl('seller');
   };
 
   const ensureAgent = async () => {
@@ -85,6 +105,7 @@ export default function App() {
         listing_id: listingId
       });
       showToast('Asset installed successfully! Delivered manifest & files.', 'success');
+      fetchListings();
     } catch (err) {
       showToast(`Install note: ${err.message}`, 'info');
     }
@@ -112,41 +133,78 @@ export default function App() {
 
   return (
     <div className="weft-app">
-      {/* Top Announcement Bar */}
-      <div className="announcement-bar">
-        <span className="badge-pulse"></span>
-        <span className="announcement-text">
-          Powered by <strong>Prava</strong> Payments · <strong>NANDA</strong> Index · <strong>Linq</strong> Messaging
-        </span>
-        <a href="#how-it-works" className="announcement-link">Connect via MCP &rarr;</a>
-      </div>
+      {/* Top Floating Ticker Banner (Hidden on Docs & Seller Dashboard views) */}
+      {view !== 'docs' && view !== 'seller' && (
+        <div className="announcement-bar">
+          <div className="announcement-inner-pill">
+            <div className="badge-pulse-wrapper">
+              <span className="badge-pulse"></span>
+            </div>
+            <span className="announcement-text">
+              Powered by <strong>Prava Payments</strong> · <strong>NANDA Index</strong> · <strong>Linq Messaging</strong>
+            </span>
+            <a onClick={() => setViewWithUrl('docs')} className="announcement-link" style={{ cursor: 'pointer' }}>
+              Connect via MCP <ArrowRight size={11} />
+            </a>
+          </div>
+        </div>
+      )}
 
-      <Navbar 
-        mode={mode} 
-        setMode={setMode} 
-        user={user} 
-        onLogout={handleLogout} 
-      />
+      {/* Main Top Navbar (Hidden on Seller Dashboard for a 100% clean standalone portal experience) */}
+      {view !== 'seller' && (
+        <Navbar 
+          mode={mode} 
+          setMode={setMode} 
+          view={view}
+          setView={setViewWithUrl}
+        />
+      )}
 
       {mode === 'human' ? (
-        <main>
-          <Hero totalListings={listings.length} />
-          <Marketplace 
-            listings={listings} 
-            onInstallFree={handleInstallFree} 
-            onPurchaseClick={handlePurchaseClick} 
-          />
-          <ProtocolSpec />
-          <SellerPortal 
-            user={user} 
-            token={token} 
-            sellerProfile={sellerProfile} 
-            onAuthSuccess={handleAuthSuccess} 
-            onListingPublished={fetchListings}
-            showToast={showToast}
-          />
-          <Footer />
-        </main>
+        view === 'landing' ? (
+          <main>
+            <Hero 
+              totalListings={listings.length} 
+              onGoToSeller={() => setViewWithUrl('seller')}
+            />
+            <Marketplace 
+              listings={listings} 
+              onInstallFree={handleInstallFree} 
+              onPurchaseClick={handlePurchaseClick} 
+              onGoToMarketplace={() => setViewWithUrl('marketplace')}
+            />
+            <ProtocolSpec />
+            <Footer onGoToSeller={() => setViewWithUrl('seller')} />
+          </main>
+        ) : view === 'marketplace' ? (
+          <main>
+            <DedicatedMarketplace 
+              listings={listings} 
+              onInstallFree={handleInstallFree} 
+              onPurchaseClick={handlePurchaseClick} 
+            />
+            <Footer onGoToSeller={() => setViewWithUrl('seller')} />
+          </main>
+        ) : view === 'docs' ? (
+          <main>
+            <DocumentationView />
+            <Footer onGoToSeller={() => setViewWithUrl('seller')} hideBanner={true} />
+          </main>
+        ) : (
+          /* Standalone Seller Portal Page (No navbar, no top ticker, no footer) */
+          <main style={{ minHeight: '100vh', background: 'var(--bg-dark)' }}>
+            <SellerPortal 
+              user={user} 
+              token={token} 
+              sellerProfile={sellerProfile} 
+              onAuthSuccess={handleAuthSuccess} 
+              onListingPublished={fetchListings}
+              showToast={showToast}
+              onLogout={handleLogout}
+              onGoToLanding={() => setViewWithUrl('landing')}
+            />
+          </main>
+        )
       ) : (
         <main>
           <AgentTerminal 
@@ -155,7 +213,7 @@ export default function App() {
             setAgentId={setAgentId}
             showToast={showToast}
           />
-          <Footer />
+          <Footer onGoToSeller={() => setViewWithUrl('seller')} />
         </main>
       )}
 
