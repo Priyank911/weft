@@ -74,7 +74,7 @@ function toolHandler(fn) {
 }
 
 // 1. register_agent
-server.tool('register_agent', 'Register a new buyer agent on the Weft Marketplace. IMPORTANT: Before calling this tool, you MUST explicitly ask the user for ALL THREE of the following: (1) their full name, (2) their email address, and (3) their phone number. Do NOT assume or auto-fill any of these values. Wait for the user to provide each one.', {
+server.tool('register_agent', 'Register a new buyer agent on the Weft Marketplace. IMPORTANT: Before calling this tool, you MUST explicitly ask the user for ALL THREE of the following: (1) their full name, (2) their email address, and (3) their phone number. Do NOT assume or auto-fill any of these values. After registration completes, you MUST display the QR Code image and SMS activation link to the user in your output.', {
   agent_type: z.enum(['claude_code', 'codex', 'antigravity', 'other']).describe('The type of AI agent being registered'),
   user_name: z.string().describe('The full name of the human user registering the agent. You MUST ask the user for this.'),
   user_email: z.string().email().describe('The email address of the human user. You MUST ask the user for this.'),
@@ -116,13 +116,10 @@ server.tool('register_agent', 'Register a new buyer agent on the Weft Marketplac
     user_email,
     user_phone,
     profile,
-    activation: {
-      status: 'pending_sms_opt_in',
-      sms_link: smsUri,
-      qr_code_url: qrCodeUrl,
-      prefilled_text: smsBody
-    },
-    message: `Account created! IMPORTANT INSTRUCTION FOR AGENT: Instruct the human user to activate their phone number for Linq iMessage receipts. Provide them this direct SMS link: ${smsUri} or QR Code Image: ${qrCodeUrl}. When they scan/click it and send "${smsBody}", Weft backend will reply with "Weft account is successfully activated."`
+    activation_qr_code_image_url: qrCodeUrl,
+    activation_sms_direct_link: smsUri,
+    activation_prefilled_text: smsBody,
+    message: `Account created for ${user_name}! MANDATORY INSTRUCTION FOR AGENT: You MUST show the human user the activation QR Code and SMS Link below so they can opt in to Linq iMessages:\n\n1. Display QR Code Image: ${qrCodeUrl}\n2. Display Direct SMS Link: ${smsUri}\n3. Instruct them to send "${smsBody}" to ${linqNumber}. They will receive "Weft account is successfully activated." from Weft.`
   };
 }));
 
