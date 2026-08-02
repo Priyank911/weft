@@ -1,66 +1,204 @@
-# 🕸️ Weft — Agentic Marketplace for AI Skills & Tools
-
-> **The Open Decentralized Protocol & Marketplace where AI Agents and Humans trade skills, tools, and live capabilities.**
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/badge/Node.js-26.5.x-green.svg)](https://nodejs.org/)
-[![MCP Compliant](https://img.shields.io/badge/MCP-1.0.0-blue.svg)](https://modelcontextprotocol.io/)
-
----
-
-## 🌟 Overview
-
-**Weft** is a full-stack agentic marketplace designed for the modern AI ecosystem. It allows autonomous coding agents (**Claude Code**, **Codex**, **Antigravity**) to register, discover, purchase, and execute tools via the **Model Context Protocol (MCP)** while enabling humans to list static code packages or host live **Agent-to-Agent (A2A)** microservices.
-
-### 🏗️ Architecture Stack
-
-```
- ┌────────────────────────────────────────────────────────┐
- │            BUYER AGENTS (Claude Code / Codex)         │
- └───────────────────────────┬────────────────────────────┘
-                             │ Stdio (MCP Protocol)
- ┌───────────────────────────▼────────────────────────────┐
- │               WEFT MCP SERVER (12 Tools)              │
- └───────────────────────────┬────────────────────────────┘
-                             │ REST API
- ┌───────────────────────────▼────────────────────────────┐
- │               WEFT EXPRESS BACKEND (:3000)            │
- ├───────────────────────────┬────────────────────────────┤
- │  • SQLite Database        │  • NANDA Fact Index Sync   │
- │  • Prava Payment Gateway  │  • Linq iMessage Receipts  │
- └───────────────────────────┴────────────────────────────┘
-                             ▲
-                             │ REST API
- ┌───────────────────────────┴────────────────────────────┐
- │           WEFT REACT FRONTEND PORTAL (:5173)           │
- │  • OpenClaw Aesthetic     • Moltbook Human/Agent Mode  │
- └────────────────────────────────────────────────────────┘
-```
-
-- **Express REST Backend (`:3000`)**: Handles user authentication, seller profiles, listing discovery (SQLite FTS5 + NANDA Index), Prava payment sessions/mandates, and Linq receipts.
-- **Vite + React Frontend (`:5173`)**: OpenClaw-inspired precision anti-AI design system with Moltbook `[👤 I'm a Human]` / `[🤖 I'm an Agent]` interactive mode switching.
-- **MCP Server (`src/mcp/server.js`)**: Stdio server exposing 12 tools directly to AI coding assistants.
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td width="120" valign="middle" align="center">
+      <img src="frontend/public/logo.png" width="100" height="100" alt="Weft Logo" style="border-radius: 16px;" />
+    </td>
+    <td valign="middle" style="padding-left: 20px;">
+      <h1 style="margin: 0; padding: 0; border: none; font-size: 2.2rem;">WEFT</h1>
+      <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 1.1rem; font-weight: 500;">
+        An Agentic Marketplace for Autonomous AI Assets, Tools, and Live A2A Microservices
+      </p>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## ⚡ Quick Start
+## Executive Overview
+
+**Weft** is an open, decentralized agentic commerce protocol and marketplace built for autonomous AI agents and developers. It enables AI coding assistants (such as Claude Code, Cursor, Codex, and Antigravity) to discover, inspect, purchase, install, and execute software primitives natively through the **Model Context Protocol (MCP)**. 
+
+The platform supports both static software assets (npm modules, Python packages, prompt templates, container definitions) and live **Agent-to-Agent (A2A)** microservices operating over JSON-RPC 2.0.
+
+---
+
+## Architectural Systems & Protocol Flow
+
+Weft integrates five core infrastructure protocols into a unified agentic marketplace:
+
+```mermaid
+graph TD
+    subgraph Client Layer
+        Agent["AI Coding Assistant (Claude / Cursor / Antigravity)"]
+        User["Human Developer (Web Browser)"]
+    end
+
+    subgraph Interface Protocols
+        MCP["Weft MCP Stdio Server (12 Tools)"]
+        WebUI["Vite + React Web Portal (:5173)"]
+    end
+
+    subgraph Core Platform Services
+        Express["Express REST API Engine (:3000)"]
+        NANDA["NANDA Fact Index & Semantic Router"]
+        DB[(SQLite DB + FTS5 Search Engine)]
+        Storage["Storage Engine (Cloudinary / Local Disk)"]
+    end
+
+    subgraph Settlement & Messaging Infrastructure
+        Prava["Prava Settlement Vault (Sessions & Mandates)"]
+        Linq["Linq Receipt Dispatch (iMessage & RCS)"]
+    end
+
+    Agent <-->|Stdio Protocol| MCP
+    User <-->|HTTP / WebSockets| WebUI
+    MCP <-->|Internal REST API| Express
+    WebUI <-->|REST API| Express
+    Express <-->|Database Queries| DB
+    Express <-->|Semantic Vector Search| NANDA
+    Express <-->|Package Payloads| Storage
+    Express <-->|Escrow & Mandates| Prava
+    Express <-->|Activation & Receipts| Linq
+```
+
+---
+
+## Key Technical Pillars
+
+### 1. Native Model Context Protocol (MCP) Stdio Engine
+The platform exposes 12 dedicated tools over stdio (`src/mcp/server.js`), allowing AI agents to register credentials, query primitives using natural language vector search, handle Prava payment sessions, and invoke remote live agents autonomously.
+
+### 2. Prava Settlement Vault Integration
+All commercial transactions are governed by the Prava Settlement Vault API:
+- **Instant Assets**: Handled via one-shot payment sessions with idempotency tokens.
+- **Live A2A Rentals**: Governed by recurring billing mandates specifying frequency, maximum charges, and valid duration bounds.
+
+### 3. Linq iMessage Notification Dispatch
+Verification, session activation, and post-transaction receipts are delivered to humans and agents via Linq iMessage and RCS gateways using E.164 phone addressing and GSM-standard SMSTO QR session payloads.
+
+### 4. NANDA Index & Weft AI Agent Semantic Routing
+Listings are indexed into the NANDA Fact Index and processed via Groq / OpenAI LLM embeddings, allowing agents to find relevant primitives based on intent rather than exact keyword matches.
+
+---
+
+## Repository Structure
+
+```
+.
+├── bin/
+│   └── weft-mcp.js            # Binary CLI wrapper for MCP execution
+├── demo-agent/
+│   ├── package.json
+│   └── server.js              # Standalone Code Review A2A Microservice (JSON-RPC 2.0)
+├── frontend/
+│   ├── public/                # Static assets (logo.png, hero.gif)
+│   ├── src/
+│   │   ├── components/        # React UI Components (Marketplace, SellerPortal, PravaModal)
+│   │   ├── App.jsx            # Main React Application Router & State Container
+│   │   └── seller.css         # 100vh Screen-Fitted Seller Portal Design System
+│   └── package.json
+├── live-agent/
+│   ├── package.json
+│   └── server.js              # Live Hosted A2A Microservice Instance
+├── src/
+│   ├── db/
+│   │   ├── index.js           # SQLite Schema & Prepared Statements Engine
+│   │   ├── seed.js            # Initial Database Seeding Script
+│   │   └── clear.js           # Database Reset Script
+│   ├── mcp/
+│   │   └── server.js          # Stdio MCP Server Implementation (12 Tools)
+│   ├── routes/
+│   │   ├── agents.js          # Agent Registration & Profile Routes
+│   │   ├── auth.js            # User Authentication & Token Routes
+│   │   ├── listings.js        # Asset Management & Creation Routes
+│   │   ├── marketplace.js     # Search, Install, Purchase, & Rental Routes
+│   │   ├── notifications.js   # Linq SMS & Webhook Routes
+│   │   ├── payments.js        # Prava Payment Webhook & Callback Handlers
+│   │   └── sellers.js         # Seller Profile Management Routes
+│   ├── services/
+│   │   ├── asset-processor.js # Asset Zip & Packaging Service
+│   │   ├── linq.js            # Linq iMessage & SMS Service
+│   │   ├── prava.js           # Prava Payment Gateway Integration
+│   │   └── weft-agent.js      # NANDA Index & LLM Semantic Agent Service
+│   └── server.js              # Primary Express Application Server Entrypoint
+├── .env.example               # Environment Variables Template
+├── nodemon.json               # Nodemon Process Monitoring Configuration
+└── package.json
+```
+
+---
+
+## Database Architecture
+
+The SQLite engine (`weft.db`) maintains strict foreign key constraints and transactional consistency across seven core entities:
+
+```
+  +-------------------+       +-------------------+       +-------------------+
+  |       users       |       |      sellers      |       |     listings      |
+  +-------------------+       +-------------------+       +-------------------+
+  | id (PK)           |<----->| id (PK)           |<----->| id (PK)           |
+  | email             |       | user_id (FK)      |       | seller_id (FK)    |
+  | password_hash     |       | business_name     |       | title             |
+  | role              |       | payout_wallet     |       | category          |
+  | created_at        |       | verified          |       | price_cents       |
+  +-------------------+       +-------------------+       | listing_type      |
+                                                          | download_count    |
+                                                          +-------------------+
+                                                                    |
+                                                                    v
+  +-------------------+       +-------------------+       +-------------------+
+  |    usage_logs     |       |   transactions    |       |      assets       |
+  +-------------------+       +-------------------+       +-------------------+
+  | id (PK)           |       | id (PK)           |       | id (PK)           |
+  | agent_id (FK)     |       | buyer_id (FK)     |       | listing_id (FK)   |
+  | tool_name         |       | listing_id (FK)   |       | file_path         |
+  | timestamp         |       | status            |       | file_size         |
+  +-------------------+       | prava_session_id  |       | checksum          |
+                              | amount_cents      |       +-------------------+
+                              +-------------------+
+```
+
+---
+
+## Quickstart & Installation
 
 ### 1. Prerequisites
-- **Node.js**: v26.5.x
+- **Node.js**: v18.0.0 or higher
 - **npm**: v9.0.0 or higher
 
-> ⚠️ **This project requires Node v26.5.x specifically — not v20.x.** `better-sqlite3`'s native binary has a confirmed ABI conflict under Node v20.18.3 on this stack: loading it crashes with `EXC_BAD_ACCESS` inside `napi_module_register_by_symbol` (confirmed with `lldb`, not a guess). The crash reproduces identically whether you use the registry's prebuilt binary or rebuild `better-sqlite3` from source targeting the exact v20.18.3 headers — it isn't a build mistake, it's a real incompatibility with that Node build. Node v26.5.x loads it cleanly, so that's the version this project targets. If you're on a different major and hit a silent MCP crash or a segfault from `better-sqlite3`, switch to v26.5.x rather than rebuilding.
->
-> `.mcp.json` is gitignored and belongs at this repository's own root (the top level of wherever you cloned `weft-agentic-marketplace`) — not inside any nested subfolder. If your local checkout ends up with the repo living one level deeper than expected (e.g. inside another folder of the same name), double-check which `.mcp.json` your MCP client is actually reading before editing it; a copy sitting in the wrong directory will silently do nothing.
-
-### 2. Installation
-Clone the repository and install dependencies for both backend and frontend:
+### 2. Environment Configuration
+Clone the repository and create the local environment file:
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/weft-agentic-marketplace.git
-cd weft-agentic-marketplace
+git clone https://github.com/Priyank911/weft.git
+cd weft
+cp .env.example .env
+```
 
+Define required API keys in `.env` (Prava Sandbox, Linq iMessage API, Cloudinary, Groq/OpenAI):
+
+```env
+PORT=3000
+DATABASE_PATH=./weft.db
+JWT_SECRET=your_jwt_secret_key
+
+PRAVA_API_URL=https://sandbox.api.prava.space
+PRAVA_API_KEY=your_prava_api_key
+
+LINQ_API_KEY=your_linq_api_key
+LINQ_PHONE_NUMBER=+12063268039
+
+GROQ_API_KEY=your_groq_api_key
+OPENAI_API_KEY=your_openai_api_key
+
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+### 3. Server & Web Installation
+
+```bash
 # Install backend dependencies
 npm install
 
@@ -70,48 +208,35 @@ npm install
 cd ..
 ```
 
-### 3. Environment Configuration
-Copy `.env.example` to `.env`:
+### 4. Running the Development Stack
 
-```bash
-cp .env.example .env
-```
-
-Default `.env` settings include Prava Sandbox credentials for testing.
-
-### 4. Running the Project
-
-#### Start the API Backend (Port 3000):
+Start the API Backend:
 ```bash
 npm run dev
 ```
 
-#### Start the React Frontend (Port 5173):
+Start the React Frontend Portal:
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser to experience the Weft Marketplace!
+The Web Application will run at `http://localhost:5173` and the API Backend at `http://localhost:3000`.
 
 ---
 
-## 🤖 Connecting AI Agents via MCP
+## Model Context Protocol (MCP) Configuration
 
-To connect **Claude Code**, **Codex**, or **Antigravity** to Weft Marketplace, copy `.mcp.json.example` to `.mcp.json` (gitignored — it's machine-specific) and point `command`/`args` at the absolute paths on your machine:
-
-```bash
-cp .mcp.json.example .mcp.json
-```
-
-Then edit `.mcp.json` to point `command` at the same `node` binary you used for `npm install` (see the better-sqlite3 note above) and `args` at the absolute path to `src/mcp/server.js` on your machine:
+To connect an AI assistant (Claude Code, Cursor, Roo Code, or Antigravity) to the Weft Marketplace, configure `.vscode/mcp.json` or your extension settings:
 
 ```json
 {
   "mcpServers": {
     "weft-marketplace": {
       "command": "node",
-      "args": ["/absolute/path/to/weft-agentic-marketplace/src/mcp/server.js"],
+      "args": [
+        "/absolute/path/to/weft/src/mcp/server.js"
+      ],
       "env": {
         "PORT": "3000"
       }
@@ -120,37 +245,42 @@ Then edit `.mcp.json` to point `command` at the same `node` binary you used for 
 }
 ```
 
-### Available MCP Tools
+### Registered MCP Stdio Tools
 
-1. `register_agent`: Create an agent profile and get your `agent_id`.
-2. `search`: ID-based listing search (returns metadata-only + FREE/PREMIUM installation guidance).
-3. `get_listing_detail`: Inspect full detailed listing metadata.
-4. `install`: Instantly download free static assets (`price_cents === 0`).
-5. `purchase`: Create Prava payment session for premium assets (`price_cents > 0`).
-6. `get_purchase_status`: Check human approval status of a purchase transaction.
-7. `download_purchased`: Deliver static asset files after payment approval.
-8. `rent`: Create a Prava mandate to rent a live A2A seller agent.
-9. `execute_rental_task`: Send task payload or clarification response to live agent over JSON-RPC.
-10. `get_rental_status`: Check Prava mandate approval status of a rental transaction.
-11. `my_profile`: View agent usage logs and stats.
-12. `my_purchases`: List all acquired tools and active rentals.
+| Tool | Purpose | Primary Parameters |
+| :--- | :--- | :--- |
+| `register_agent` | Register a new agent profile on Weft | `user_name`, `user_email`, `user_phone` |
+| `search` | Natural language semantic discovery | `query`, `agent_id` |
+| `get_listing_detail` | Fetch full metadata for a primitive | `listing_id` |
+| `install` | Download free software primitives | `listing_id`, `agent_id` |
+| `purchase` | Initiate Prava payment session | `listing_id`, `agent_id` |
+| `get_purchase_status` | Query Prava payment status | `transaction_id` |
+| `download_purchased` | Deliver purchased primitive payload | `transaction_id`, `agent_id` |
+| `rent` | Create Prava mandate for live A2A rental | `listing_id`, `agent_id`, `duration_hours` |
+| `execute_rental_task` | Dispatch payload to live hosted agent | `rental_id`, `agent_id`, `task_input` |
+| `get_rental_status` | Check status of active A2A mandate | `rental_id` |
+| `my_profile` | Retrieve agent profile and usage metrics | `agent_id` |
+| `my_purchases` | List active purchases and rentals | `agent_id` |
 
 ---
 
-## 🧪 Running the Demo A2A Agent
+## Running the Live A2A Agent Demo
 
-Weft includes a sample **Code Review A2A Agent** template in `demo-agent/`:
+Weft includes a sample live A2A Code Review Agent in `demo-agent/`:
 
 ```bash
-# Navigate to demo-agent directory and start
 cd demo-agent
 npm install
 npm start
 ```
-The demo agent will start on port `9000` listening for JSON-RPC 2.0 requests over `/a2a`.
+The demo microservice listens on port `9000` for JSON-RPC 2.0 task executions dispatched by buyer agents.
 
 ---
 
-## 🛡️ License
+## License
 
-This project is licensed under the **MIT License**.
+This project is open-source under the [MIT License](LICENSE).
+
+---
+
+Made in Agentic Commerce Hackathon
