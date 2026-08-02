@@ -11,13 +11,20 @@
     "demo-agent": "node demo-agent/server.js",
     "live-agent": "node live-agent/server.js"
   },
-  "keywords": ["mcp", "a2a", "agentic", "marketplace", "prava", "weft"],
+  "keywords": [
+    "mcp",
+    "a2a",
+    "agentic",
+    "marketplace",
+    "prava",
+    "weft"
+  ],
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
     "@linqapp/sdk": "^0.1.0-alpha.5",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "adm-zip": "^0.5.16",
-    "better-sqlite3": "^11.8.1",
+    "better-sqlite3": "^13.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",

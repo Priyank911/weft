@@ -7,6 +7,7 @@ import { sendPurchaseConfirmation, sendRentalNotification } from '../services/li
 import { createMandate } from '../services/prava.js';
 import { sendTask, getAgentCard, handleTaskResponse } from '../services/a2a-client.js';
 import { semanticSearch } from '../services/openai.js';
+import { aiSearchNanda } from '../services/weft-agent.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 const LIVE_INTENT_PATTERN = /\b(rent|hire|live agent)\b/i;
@@ -45,7 +46,32 @@ router.post('/search', async (req, res, next) => {
     const offset = 0;
     let results = [];
     
-    if (query) {
+    if (query && process.env.OPENAI_API_KEY) {
+      try {
+        const nandaIds = await aiSearchNanda(query);
+        if (nandaIds && nandaIds.length > 0) {
+          console.log('[Marketplace] Weft Agent returned NANDA IDs:', nandaIds);
+          // Cross-reference with local DB to ensure only trusted/verified Weft assets are returned
+          results = nandaIds.map(id => {
+            const cleanId = id.replace(/^(skill|agent|tool)-/, '');
+            return getListingById.get(cleanId);
+          }).filter(Boolean);
+        }
+      } catch (e) {
+        console.warn('[Marketplace] Weft AI Agent Search failed, falling back to local FTS:', e.message);
+        try {
+          const ftsQuery = buildFtsQuery(query);
+          results = ftsQuery ? searchListingsFTS.all(ftsQuery, limit, offset) : [];
+        } catch (ftsError) {
+          results = searchListingsByFilter.all(
+            category || null, category || null,
+            listing_type || null, listing_type || null,
+            max_price_cents || null, max_price_cents || null,
+            limit, offset
+          );
+        }
+      }
+    } else if (query) {
       try {
         const ftsQuery = buildFtsQuery(query);
         results = ftsQuery ? searchListingsFTS.all(ftsQuery, limit, offset) : [];
